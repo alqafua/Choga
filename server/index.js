@@ -4,6 +4,7 @@ import cookieParser from "cookie-parser";
 import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
+import { makeStore } from "./store.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -18,6 +19,9 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
 const DATA_FILE = path.join(DATA_DIR, "settings.json");
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+
+const customers = makeStore(DATA_DIR, "customers.json");
+const orders = makeStore(DATA_DIR, "orders.json");
 
 const app = express();
 app.use(express.json({ limit: "2mb" }));
@@ -76,6 +80,46 @@ app.get("/api/settings", requireAuth, (req, res) => {
 
 app.post("/api/settings", requireAuth, (req, res) => {
   fs.writeFileSync(DATA_FILE, JSON.stringify(req.body ?? {}, null, 2));
+  res.json({ ok: true });
+});
+
+// ── customers ─────────────────────────────────────────────────
+app.get("/api/customers", requireAuth, (req, res) => {
+  res.json(customers.list());
+});
+
+app.post("/api/customers", requireAuth, (req, res) => {
+  res.status(201).json(customers.create(req.body ?? {}));
+});
+
+app.put("/api/customers/:id", requireAuth, (req, res) => {
+  const updated = customers.update(req.params.id, req.body ?? {});
+  if (!updated) return res.status(404).json({ error: "not found" });
+  res.json(updated);
+});
+
+app.delete("/api/customers/:id", requireAuth, (req, res) => {
+  if (!customers.remove(req.params.id)) return res.status(404).json({ error: "not found" });
+  res.json({ ok: true });
+});
+
+// ── orders ───────────────────────────────────────────────────
+app.get("/api/orders", requireAuth, (req, res) => {
+  res.json(orders.list());
+});
+
+app.post("/api/orders", requireAuth, (req, res) => {
+  res.status(201).json(orders.create(req.body ?? {}));
+});
+
+app.put("/api/orders/:id", requireAuth, (req, res) => {
+  const updated = orders.update(req.params.id, req.body ?? {});
+  if (!updated) return res.status(404).json({ error: "not found" });
+  res.json(updated);
+});
+
+app.delete("/api/orders/:id", requireAuth, (req, res) => {
+  if (!orders.remove(req.params.id)) return res.status(404).json({ error: "not found" });
   res.json({ ok: true });
 });
 

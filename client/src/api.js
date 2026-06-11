@@ -58,3 +58,21 @@ export async function saveSettings(data) {
   });
   return res.json();
 }
+
+// ── customers ─────────────────────────────────────────────────
+export const listCustomers = () => request("/api/customers").then((r) => r.json());
+export const createCustomer = (data) =>
+  request("/api/customers", { method: "POST", body: JSON.stringify(data) }).then((r) => r.json());
+export const updateCustomer = (id, data) =>
+  request(`/api/customers/${id}`, { method: "PUT", body: JSON.stringify(data) }).then((r) => r.json());
+export const deleteCustomer = (id) =>
+  request(`/api/customers/${id}`, { method: "DELETE" }).then((r) => r.json());
+
+// ── orders ───────────────────────────────────────────────────
+export const listOrders = () => request("/api/orders").then((r) => r.json());
+export const createOrder = (data) =>
+  request("/api/orders", { method: "POST", body: JSON.stringify(data) }).then((r) => r.json());
+export const updateOrder = (id, data) =>
+  request(`/api/orders/${id}`, { method: "PUT", body: JSON.stringify(data) }).then((r) => r.json());
+export const deleteOrder = (id) =>
+  request(`/api/orders/${id}`, { method: "DELETE" }).then((r) => r.json());

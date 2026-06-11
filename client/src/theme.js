@@ -11,6 +11,8 @@ export const C = {
   dim:     "#3a4560",
   green:   "#22c55e",
   red:     "#ef4444",
+  blue:    "#4A90D9",
+  purple:  "#A78BFA",
 };
 
 export const inpBase = {
@@ -28,3 +30,75 @@ export const fontImport = `
   input::placeholder,textarea::placeholder{color:${C.dim}}
   input,textarea{font-family:'Tajawal',system-ui,sans-serif}
 `;
+
+// ─── shared layout / form pieces ──────────────────────────────
+export const card = {
+  background: C.card, borderRadius: 18,
+  border: `1px solid ${C.border}`,
+  padding: "18px 16px", marginBottom: 12,
+};
+
+export const lbl = {
+  display: "block", fontSize: 11, color: C.muted,
+  marginBottom: 7, fontWeight: 500,
+};
+
+export const subHead = {
+  fontSize: 12, fontWeight: 700, color: C.muted,
+  textTransform: "uppercase", letterSpacing: "0.12em",
+  paddingBottom: 12, marginBottom: 14,
+  borderBottom: `1px solid ${C.border}`,
+};
+
+export const fieldStyle = (focus, id) => ({
+  ...inpBase,
+  borderColor: focus === id ? C.accent : C.border,
+  boxShadow:   focus === id ? `0 0 0 3px ${C.accent}18` : "none",
+});
+
+export const chipStyle = (on) => ({
+  padding: "8px 14px", borderRadius: 10, fontSize: 13,
+  border: `1px solid ${on ? C.accent : C.border}`,
+  background: on ? `${C.accent}22` : "transparent",
+  color: on ? C.accent2 : C.muted,
+  cursor: "pointer", fontFamily: "'Tajawal',system-ui,sans-serif",
+  fontWeight: on ? 600 : 400, transition: "all .15s",
+});
+
+export const statusChipStyle = (on, color) => ({
+  padding: "8px 14px", borderRadius: 10, fontSize: 13,
+  border: `1px solid ${on ? color : C.border}`,
+  background: on ? `${color}22` : "transparent",
+  color: on ? color : C.muted,
+  cursor: "pointer", fontFamily: "'Tajawal',system-ui,sans-serif",
+  fontWeight: on ? 600 : 400, transition: "all .15s",
+});
+
+export const primaryBtn = {
+  padding: "11px 18px", borderRadius: 12, fontSize: 13, fontWeight: 700,
+  border: "none", cursor: "pointer", fontFamily: "'Tajawal',system-ui,sans-serif",
+  background: `linear-gradient(135deg, ${C.accent}, #E08820)`, color: "#0a0a0a",
+};
+
+export const ghostBtn = {
+  padding: "10px 16px", borderRadius: 12, fontSize: 13, fontWeight: 600,
+  border: `1px solid ${C.border}`, background: "transparent", color: C.muted,
+  cursor: "pointer", fontFamily: "'Tajawal',system-ui,sans-serif",
+};
+
+export const dangerBtn = {
+  padding: "10px 16px", borderRadius: 12, fontSize: 13, fontWeight: 600,
+  border: `1px solid ${C.red}40`, background: `${C.red}15`, color: C.red,
+  cursor: "pointer", fontFamily: "'Tajawal',system-ui,sans-serif",
+};
+
+// ─── orders ────────────────────────────────────────────────
+export const ORDER_STATUSES = [
+  { id: "new",        label: "جديدة",         color: C.blue },
+  { id: "processing", label: "قيد التجهيز",   color: C.accent },
+  { id: "ready",      label: "جاهزة للتسليم", color: C.purple },
+  { id: "delivered",  label: "تم التسليم",    color: C.green },
+  { id: "cancelled",  label: "ملغية",         color: C.red },
+];
+
+export const statusInfo = (id) => ORDER_STATUSES.find((s) => s.id === id) || ORDER_STATUSES[0];
