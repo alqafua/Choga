@@ -59,6 +59,10 @@ export async function saveSettings(data) {
   return res.json();
 }
 
+// ── meta (facebook / instagram) connection ──────────────────────
+export const getMetaStatus = () => request("/api/meta/status").then((r) => r.json());
+export const disconnectMeta = () => request("/api/meta/disconnect", { method: "POST" }).then((r) => r.json());
+
 // ── customers ─────────────────────────────────────────────────
 export const listCustomers = () => request("/api/customers").then((r) => r.json());
 export const createCustomer = (data) =>
