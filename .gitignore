@@ -1,0 +1,19 @@
+node_modules
+dist
+dist-ssr
+*.local
+
+# persisted app data (use a Railway volume in production)
+server/data/
+
+# env files
+.env
+.env.*
+!.env.example
+
+# editor / os
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.log

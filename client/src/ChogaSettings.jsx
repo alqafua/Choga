@@ -1,18 +1,6 @@
 import { useState, useEffect } from "react";
-
-// ─── palette ───────────────────────────────────────────────
-const C = {
-  bg:      "#13171f",
-  card:    "#1b2131",
-  inp:     "#222a3a",
-  border:  "#2a3348",
-  accent:  "#F0A030",
-  accent2: "#F5C060",
-  text:    "#E8EDF5",
-  muted:   "#6B7A99",
-  dim:     "#3a4560",
-  green:   "#22c55e",
-};
+import { C, inpBase, fontImport } from "./theme";
+import { getSettings, saveSettings, logout } from "./api";
 
 // ─── nav tabs ──────────────────────────────────────────────
 const NAV = [
@@ -60,15 +48,7 @@ const DEF = {
   api:{ anthropic:"", meta:"", tiktok:"" },
 };
 
-// ─── reusable input style ───────────────────────────────────
-const inpBase = {
-  width:"100%", background:C.inp, border:`1px solid ${C.border}`,
-  borderRadius:12, padding:"12px 14px", color:C.text,
-  fontSize:14, outline:"none", fontFamily:"'Tajawal',system-ui,sans-serif",
-  transition:"border-color .2s", boxSizing:"border-box",
-};
-
-export default function App() {
+export default function ChogaSettings({ onLogout }) {
   const [activeNav, setActiveNav] = useState("settings");
   const [sec,       setSec]       = useState("identity");
   const [data,      setData]      = useState(DEF);
@@ -79,9 +59,11 @@ export default function App() {
   useEffect(()=>{
     (async()=>{
       try {
-        const r = await window.storage.get("choga-settings");
-        if(r?.value) setData(d=>({...d,...JSON.parse(r.value)}));
-      } catch{}
+        const remote = await getSettings();
+        if(remote && Object.keys(remote).length) setData(d=>({...d,...remote}));
+      } catch {
+        // not logged in / settings not available yet — keep defaults
+      }
     })();
   },[]);
 
@@ -92,9 +74,18 @@ export default function App() {
 
   const save = async () => {
     setStatus("saving");
-    try { await window.storage.set("choga-settings", JSON.stringify(data)); } catch{}
-    setStatus("saved");
+    try {
+      await saveSettings(data);
+      setStatus("saved");
+    } catch {
+      setStatus("error");
+    }
     setTimeout(()=>setStatus("idle"), 2500);
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    onLogout();
   };
 
   const iStyle = (id) => ({
@@ -142,14 +133,7 @@ export default function App() {
 
   return (
     <div dir="rtl" style={{fontFamily:"'Tajawal',system-ui,sans-serif", background:C.bg, color:C.text, height:"100vh", display:"flex", flexDirection:"column", overflow:"hidden"}}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;600;700;800&display=swap');
-        *{box-sizing:border-box;margin:0;padding:0}
-        ::-webkit-scrollbar{width:3px;height:3px}
-        ::-webkit-scrollbar-thumb{background:${C.border};border-radius:4px}
-        input::placeholder,textarea::placeholder{color:${C.dim}}
-        input,textarea{font-family:'Tajawal',system-ui,sans-serif}
-      `}</style>
+      <style>{fontImport}</style>
 
       {/* ── Top header ── */}
       <div style={{flexShrink:0, padding:"14px 16px 0", background:C.bg}}>
@@ -163,9 +147,19 @@ export default function App() {
               <div style={{fontSize:10,color:C.muted}}>مركز المحتوى</div>
             </div>
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:6,background:`${C.green}18`,border:`1px solid ${C.green}30`,borderRadius:99,padding:"5px 12px"}}>
-            <div style={{width:7,height:7,borderRadius:"50%",background:C.green}}/>
-            <span style={{fontSize:11,color:C.green,fontWeight:600}}>نشط</span>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,background:`${C.green}18`,border:`1px solid ${C.green}30`,borderRadius:99,padding:"5px 12px"}}>
+              <div style={{width:7,height:7,borderRadius:"50%",background:C.green}}/>
+              <span style={{fontSize:11,color:C.green,fontWeight:600}}>نشط</span>
+            </div>
+            <button onClick={handleLogout} style={{
+              display:"flex",alignItems:"center",gap:6,background:"transparent",
+              border:`1px solid ${C.border}`,borderRadius:99,padding:"5px 12px",
+              color:C.muted, fontSize:11, fontWeight:600, cursor:"pointer",
+              fontFamily:"'Tajawal',system-ui,sans-serif",
+            }}>
+              خروج
+            </button>
           </div>
         </div>
 
@@ -349,7 +343,7 @@ export default function App() {
 
           {/* ══ API KEYS ══ */}
           {sec==="api" && <>
-            <p style={{fontSize:12,color:C.muted,marginBottom:14,lineHeight:1.7}}>مفاتيح API تمكّن النشر التلقائي والذكاء الاصطناعي. تُحفظ على جهازك فقط.</p>
+            <p style={{fontSize:12,color:C.muted,marginBottom:14,lineHeight:1.7}}>مفاتيح API تمكّن النشر التلقائي والذكاء الاصطناعي. تُحفظ على الخادم الخاص بك فقط.</p>
             {API_FIELDS.map(f=>{
               const val  = data.api[f.id];
               const show = reveal[f.id];
@@ -397,22 +391,24 @@ export default function App() {
           <button onClick={save} disabled={status==="saving"}
             style={{
               width:"100%", padding:"16px", borderRadius:16,
-              fontSize:16, fontWeight:700, border:"none", cursor:"pointer",
+              fontSize:16, fontWeight:700, cursor:"pointer",
               fontFamily:"'Tajawal',system-ui,sans-serif",
               marginTop:4, marginBottom:8,
               background: status==="saved"
                 ? "rgba(34,197,94,0.15)"
+                : status==="error"
+                ? "rgba(239,68,68,0.15)"
                 : `linear-gradient(135deg, ${C.accent}, #E08820)`,
-              color: status==="saved" ? C.green : "#0a0a0a",
-              boxShadow: status==="saved" ? "none" : `0 6px 28px ${C.accent}45`,
-              border: status==="saved" ? `1px solid ${C.green}40` : "none",
+              color: status==="saved" ? C.green : status==="error" ? C.red : "#0a0a0a",
+              boxShadow: status==="saved"||status==="error" ? "none" : `0 6px 28px ${C.accent}45`,
+              border: status==="saved" ? `1px solid ${C.green}40` : status==="error" ? `1px solid ${C.red}40` : "none",
               transition:"all .2s",
               display:"flex", alignItems:"center", justifyContent:"center", gap:10,
             }}>
             <span style={{fontSize:20}}>
-              {status==="saving"?"⏳":status==="saved"?"✅":"💾"}
+              {status==="saving"?"⏳":status==="saved"?"✅":status==="error"?"⚠️":"💾"}
             </span>
-            {status==="saving"?"جاري الحفظ…":status==="saved"?"تم حفظ الإعدادات بنجاح":"حفظ الإعدادات"}
+            {status==="saving"?"جاري الحفظ…":status==="saved"?"تم حفظ الإعدادات بنجاح":status==="error"?"تعذّر الحفظ — حاول مجدداً":"حفظ الإعدادات"}
           </button>
 
           <p style={{textAlign:"center",color:C.dim,fontSize:11,paddingBottom:8}}>
