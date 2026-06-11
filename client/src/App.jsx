@@ -1,11 +1,22 @@
 import { useState, useEffect } from "react";
 import Login from "./Login";
-import ChogaSettings from "./ChogaSettings";
+import Layout from "./Layout";
+import SettingsPage from "./SettingsPage";
+import CustomersPage from "./CustomersPage";
+import OrdersPage from "./OrdersPage";
+import ComingSoon from "./ComingSoon";
 import { checkAuth } from "./api";
 import { C, fontImport } from "./theme";
 
+const PAGES = {
+  settings: SettingsPage,
+  customers: CustomersPage,
+  orders: OrdersPage,
+};
+
 export default function App() {
   const [authed, setAuthed] = useState(null); // null = checking
+  const [activeNav, setActiveNav] = useState("settings");
 
   useEffect(() => {
     checkAuth().then(setAuthed);
@@ -24,5 +35,12 @@ export default function App() {
   }
 
   if (!authed) return <Login onSuccess={() => setAuthed(true)} />;
-  return <ChogaSettings onLogout={() => setAuthed(false)} />;
+
+  const Page = PAGES[activeNav] || ComingSoon;
+
+  return (
+    <Layout activeNav={activeNav} setActiveNav={setActiveNav} onLogout={() => setAuthed(false)}>
+      <Page />
+    </Layout>
+  );
 }
