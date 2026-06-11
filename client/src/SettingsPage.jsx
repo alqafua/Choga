@@ -20,6 +20,40 @@ const API_FIELDS = [
   { id:"tiktok",    name:"TikTok",           desc:"النشر على تيك توك",                 where:"developers.tiktok.com  ←  Apps  ←  Keys", ph:"xxxx-xxxx-xxxx-xxxx" },
 ];
 
+const API_GUIDES = {
+  anthropic: {
+    url: "https://console.anthropic.com/settings/keys",
+    steps: [
+      "افتح الرابط أدناه وسجّل دخول أو أنشئ حساب جديد",
+      "من القائمة الجانبية اضغط \"API Keys\"",
+      "اضغط \"Create Key\" وأعطه اسم مثل \"Choga\"",
+      "انسخ المفتاح فوراً (يبدأ بـ sk-ant-...) — لن يظهر مرة ثانية",
+      "الصقه بالخانة أعلاه ثم اضغط \"حفظ الإعدادات\" بالأسفل",
+    ],
+  },
+  meta: {
+    url: "https://developers.facebook.com/apps",
+    steps: [
+      "افتح الرابط أدناه وسجّل دخول بحساب فيسبوك الخاص بالمحل",
+      "اضغط \"My Apps\" ← \"Create App\" ← اختر نوع \"Business\"",
+      "من إعدادات التطبيق أضف منتج \"Facebook Login\" و\"Instagram Graph API\"",
+      "اربط صفحة الفيسبوك وحساب إنستغرام (Business) بالتطبيق من إعدادات الأعمال",
+      "من \"Graph API Explorer\" اختر تطبيقك واطلب الصلاحيات: pages_manage_posts, pages_read_engagement, instagram_basic, instagram_content_publish",
+      "اضغط \"Generate Access Token\" وانسخه (يفضّل تحويله لاحقاً إلى Long-Lived Token)",
+    ],
+  },
+  tiktok: {
+    url: "https://developers.tiktok.com/apps",
+    steps: [
+      "افتح الرابط أدناه وسجّل دخول بحساب تيك توك الخاص بالمحل",
+      "اضغط \"Manage apps\" ← \"Create an app\"",
+      "من إعدادات التطبيق فعّل صلاحية \"Content Posting API\"",
+      "انسخ Client Key و Client Secret من صفحة التطبيق",
+      "أكمل عملية OAuth للحصول على Access Token (يحتاج مراجعة من تيك توك قبل التفعيل الكامل)",
+    ],
+  },
+};
+
 const DEF = {
   name:"Choga", nameAr:"شوقا",
   type:"متجر شوكولاتة فاخرة", location:"صنعاء، اليمن",
@@ -39,6 +73,7 @@ export default function SettingsPage() {
   const [sec,    setSec]    = useState("identity");
   const [data,   setData]   = useState(DEF);
   const [reveal, setReveal] = useState({});
+  const [guideOpen, setGuideOpen] = useState({});
   const [focus,  setFocus]  = useState("");
   const [status, setStatus] = useState("idle");
 
@@ -261,6 +296,27 @@ export default function SettingsPage() {
                   </button>
                 </div>
                 <div style={{fontSize:11,color:C.dim,fontFamily:"monospace",direction:"ltr",textAlign:"right"}}>📍 {f.where}</div>
+
+                <button
+                  type="button"
+                  onClick={()=>setGuideOpen(g=>({...g,[f.id]:!g[f.id]}))}
+                  style={{marginTop:10, background:"none", border:"none", padding:0, cursor:"pointer", fontSize:12, fontWeight:600, color:C.accent2, fontFamily:"'Tajawal',system-ui,sans-serif"}}>
+                  {guideOpen[f.id] ? "إخفاء خطوات الحصول على المفتاح ▴" : "كيف أحصل على هذا المفتاح؟ ▾"}
+                </button>
+
+                {guideOpen[f.id] && (
+                  <div style={{marginTop:10, background:C.inp, border:`1px solid ${C.border}`, borderRadius:10, padding:"12px 14px"}}>
+                    <ol style={{margin:0, paddingRight:18, display:"flex", flexDirection:"column", gap:6}}>
+                      {API_GUIDES[f.id].steps.map((s,i)=>(
+                        <li key={i} style={{fontSize:12, color:C.muted, lineHeight:1.7}}>{s}</li>
+                      ))}
+                    </ol>
+                    <a href={API_GUIDES[f.id].url} target="_blank" rel="noopener noreferrer"
+                       style={{display:"inline-block", marginTop:10, fontSize:11, color:C.accent, direction:"ltr", textDecoration:"none", fontFamily:"monospace"}}>
+                      🔗 {API_GUIDES[f.id].url}
+                    </a>
+                  </div>
+                )}
               </div>
             );
           })}
