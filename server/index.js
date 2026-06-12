@@ -23,16 +23,15 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 const customers = makeStore(DATA_DIR, "customers.json");
 const orders = makeStore(DATA_DIR, "orders.json");
 
-const META_APP_ID = process.env.META_APP_ID || "";
-const META_APP_SECRET = process.env.META_APP_SECRET || "";
+const INSTAGRAM_APP_ID = process.env.INSTAGRAM_APP_ID || "";
+const INSTAGRAM_APP_SECRET = process.env.INSTAGRAM_APP_SECRET || "";
 const META_FILE = path.join(DATA_DIR, "meta-connection.json");
-const GRAPH = "https://graph.facebook.com/v21.0";
-const META_SCOPES = [
-  "pages_show_list",
-  "pages_read_engagement",
-  "pages_manage_posts",
-  "instagram_basic",
-  "instagram_content_publish",
+const IG_GRAPH = "https://graph.instagram.com";
+const IG_SCOPES = [
+  "instagram_business_basic",
+  "instagram_business_manage_messages",
+  "instagram_business_manage_comments",
+  "instagram_business_content_publish",
 ].join(",");
 
 function readMetaConnection() {
@@ -148,22 +147,21 @@ app.delete("/api/orders/:id", requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// ── meta (facebook / instagram) connection ─────────────────────
+// ── instagram (business login) connection ──────────────────────
 app.get("/api/meta/status", requireAuth, (req, res) => {
   const conn = readMetaConnection();
   res.json({
-    configured: !!(META_APP_ID && META_APP_SECRET),
+    configured: !!(INSTAGRAM_APP_ID && INSTAGRAM_APP_SECRET),
     connected: !!conn,
-    pageName: conn?.pageName || null,
     igUsername: conn?.igUsername || null,
     connectedAt: conn?.connectedAt || null,
   });
 });
 
 app.get("/api/meta/connect", requireAuth, (req, res) => {
-  if (!META_APP_ID) return res.status(500).send("META_APP_ID is not configured");
+  if (!INSTAGRAM_APP_ID) return res.status(500).send("INSTAGRAM_APP_ID is not configured");
   const redirectUri = `${req.protocol}://${req.get("host")}/api/meta/callback`;
-  const url = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(META_SCOPES)}&response_type=code`;
+  const url = `https://www.instagram.com/oauth/authorize?client_id=${INSTAGRAM_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(IG_SCOPES)}&response_type=code`;
   res.redirect(url);
 });
 
@@ -181,39 +179,39 @@ app.get("/api/meta/callback", async (req, res) => {
   const redirectUri = `${req.protocol}://${req.get("host")}/api/meta/callback`;
 
   try {
-    const tokenRes = await fetch(
-      `${GRAPH}/oauth/access_token?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&client_secret=${META_APP_SECRET}&code=${code}`
-    );
+    const form = new URLSearchParams({
+      client_id: INSTAGRAM_APP_ID,
+      client_secret: INSTAGRAM_APP_SECRET,
+      grant_type: "authorization_code",
+      redirect_uri: redirectUri,
+      code: String(code),
+    });
+    const tokenRes = await fetch("https://api.instagram.com/oauth/access_token", {
+      method: "POST",
+      body: form,
+    });
     const tokenData = await tokenRes.json();
     if (!tokenData.access_token) throw new Error("token exchange failed");
 
     const longRes = await fetch(
-      `${GRAPH}/oauth/access_token?grant_type=fb_exchange_token&client_id=${META_APP_ID}&client_secret=${META_APP_SECRET}&fb_exchange_token=${tokenData.access_token}`
+      `${IG_GRAPH}/access_token?grant_type=ig_exchange_token&client_secret=${INSTAGRAM_APP_SECRET}&access_token=${tokenData.access_token}`
     );
     const longData = await longRes.json();
-    const userToken = longData.access_token || tokenData.access_token;
+    const accessToken = longData.access_token || tokenData.access_token;
 
-    const pagesRes = await fetch(`${GRAPH}/me/accounts?access_token=${userToken}`);
-    const pagesData = await pagesRes.json();
-    const page = pagesData.data?.[0];
-    if (!page) throw new Error("no pages found");
-
-    const igRes = await fetch(`${GRAPH}/${page.id}?fields=instagram_business_account{id,username}&access_token=${page.access_token}`);
-    const igData = await igRes.json();
-    const ig = igData.instagram_business_account;
+    const meRes = await fetch(`${IG_GRAPH}/v21.0/me?fields=user_id,username&access_token=${accessToken}`);
+    const meData = await meRes.json();
 
     writeMetaConnection({
-      pageId: page.id,
-      pageName: page.name,
-      pageAccessToken: page.access_token,
-      igUserId: ig?.id || null,
-      igUsername: ig?.username || null,
+      igUserId: meData.user_id || tokenData.user_id || null,
+      igUsername: meData.username || null,
+      accessToken,
       connectedAt: new Date().toISOString(),
     });
 
     res.redirect("/?meta=connected");
   } catch (err) {
-    console.error("meta oauth error:", err);
+    console.error("instagram oauth error:", err);
     res.redirect("/?meta=error");
   }
 });
