@@ -26,6 +26,7 @@ const content = makeStore(DATA_DIR, "content.json");
 const assets = makeStore(DATA_DIR, "assets.json");
 const research = makeStore(DATA_DIR, "research.json");
 const replies = makeStore(DATA_DIR, "replies.json");
+const catalog = makeStore(DATA_DIR, "catalog.json");
 
 const INSTAGRAM_APP_ID = process.env.INSTAGRAM_APP_ID || "";
 const INSTAGRAM_APP_SECRET = process.env.INSTAGRAM_APP_SECRET || "";
@@ -210,6 +211,19 @@ app.delete("/api/replies/:id", requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── catalog (products shown on the public storefront) ──────────
+app.get("/api/catalog", requireAuth, (req, res) => res.json(catalog.list()));
+app.post("/api/catalog", requireAuth, (req, res) => res.status(201).json(catalog.create(req.body ?? {})));
+app.put("/api/catalog/:id", requireAuth, (req, res) => {
+  const updated = catalog.update(req.params.id, req.body ?? {});
+  if (!updated) return res.status(404).json({ error: "not found" });
+  res.json(updated);
+});
+app.delete("/api/catalog/:id", requireAuth, (req, res) => {
+  if (!catalog.remove(req.params.id)) return res.status(404).json({ error: "not found" });
+  res.json({ ok: true });
+});
+
 // ── AI helpers (Anthropic) ─────────────────────────────────────
 function readSettings() {
   try {
@@ -357,6 +371,65 @@ app.get("/api/meta/status", requireAuth, async (req, res) => {
   });
 });
 
+// Real follower / post performance pulled live from Instagram & Facebook.
+app.get("/api/meta/insights", requireAuth, async (req, res) => {
+  const conn = readMetaConnection();
+  if (!conn) return res.json({ connected: false });
+
+  // Tokens from the Instagram Business Login flow only work against
+  // graph.instagram.com; tokens obtained via Facebook Login (which also
+  // gave us a pageId) work against graph.facebook.com.
+  const base = conn.pageId ? "https://graph.facebook.com/v21.0" : `${IG_GRAPH}/v21.0`;
+
+  let instagram = null;
+  if (conn.igUserId) {
+    try {
+      const igRes = await fetch(
+        `${base}/${conn.igUserId}?fields=username,followers_count,media_count,profile_picture_url&access_token=${conn.accessToken}`
+      );
+      const igData = await igRes.json();
+      let recentMedia = [];
+      try {
+        const mediaRes = await fetch(
+          `${base}/${conn.igUserId}/media?fields=id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count&limit=6&access_token=${conn.accessToken}`
+        );
+        const mediaData = await mediaRes.json();
+        recentMedia = mediaData.data || [];
+      } catch {
+        // recent media is best-effort
+      }
+      instagram = {
+        username: igData.username || conn.igUsername || null,
+        followers: igData.followers_count ?? null,
+        mediaCount: igData.media_count ?? null,
+        profilePic: igData.profile_picture_url || null,
+        recentMedia,
+      };
+    } catch (err) {
+      console.error("instagram insights error:", err);
+    }
+  }
+
+  let facebook = null;
+  if (conn.pageId) {
+    try {
+      const pageRes = await fetch(
+        `https://graph.facebook.com/v21.0/${conn.pageId}?fields=name,followers_count,fan_count,picture&access_token=${conn.accessToken}`
+      );
+      const pageData = await pageRes.json();
+      facebook = {
+        name: pageData.name || null,
+        followers: pageData.followers_count ?? pageData.fan_count ?? null,
+        picture: pageData.picture?.data?.url || null,
+      };
+    } catch (err) {
+      console.error("facebook insights error:", err);
+    }
+  }
+
+  res.json({ connected: true, instagram, facebook });
+});
+
 app.get("/api/meta/connect", requireAuth, (req, res) => {
   if (!INSTAGRAM_APP_ID) return res.status(500).send("INSTAGRAM_APP_ID is not configured");
   const redirectUri = `${req.protocol}://${req.get("host")}/api/meta/callback`;
@@ -482,10 +555,27 @@ app.post("/api/meta/disconnect", requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── public storefront (no auth — read-only) ────────────────────
+app.get("/api/public/storefront", (req, res) => {
+  const settings = readSettings();
+  const appearance = settings.appearance || {};
+  res.json({
+    name: settings.nameAr || settings.name || "",
+    tagline: settings.tagline || "",
+    description: settings.description || "",
+    location: settings.location || "",
+    logo: appearance.logo || "",
+    coverImage: appearance.coverImage || "",
+    themeColor: appearance.themeColor || "",
+    links: appearance.links || {},
+    catalog: catalog.list().filter((c) => c.visible),
+  });
+});
+
 // ── serve the built frontend ─────────────────────────────────
 const clientDist = path.join(__dirname, "..", "client", "dist");
 app.use(express.static(clientDist));
-app.get("/{*splat}", (req, res) => {
+app.get("*", (req, res) => {
   res.sendFile(path.join(clientDist, "index.html"));
 });
 

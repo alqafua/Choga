@@ -12,6 +12,10 @@ import PublishPage from "./PublishPage";
 import AssetsPage from "./AssetsPage";
 import ResearchPage from "./ResearchPage";
 import InboxPage from "./InboxPage";
+import CatalogPage from "./CatalogPage";
+import WebsitePage from "./WebsitePage";
+import AppearancePage from "./AppearancePage";
+import StorefrontPage from "./StorefrontPage";
 import ComingSoon from "./ComingSoon";
 import { checkAuth } from "./api";
 import { C, fontImport } from "./theme";
@@ -28,6 +32,9 @@ const PAGES = {
   assets: AssetsPage,
   research: ResearchPage,
   inbox: InboxPage,
+  catalog: CatalogPage,
+  website: WebsitePage,
+  appearance: AppearancePage,
 };
 
 export default function App() {
@@ -35,8 +42,13 @@ export default function App() {
   const [activeNav, setActiveNav] = useState("settings");
 
   useEffect(() => {
+    if (window.location.pathname.startsWith("/store")) return;
     checkAuth().then(setAuthed);
   }, []);
+
+  if (window.location.pathname.startsWith("/store")) {
+    return <StorefrontPage />;
+  }
 
   if (authed === null) {
     return (
