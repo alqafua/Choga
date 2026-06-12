@@ -15,7 +15,6 @@ const PLATFORMS = [
 
 const API_FIELDS = [
   { id:"anthropic", name:"Anthropic Claude", desc:"الذكاء الاصطناعي — صناعة المحتوى", where:"console.anthropic.com  ←  API Keys",       ph:"sk-ant-api03-..." },
-  { id:"meta",      name:"Meta / Facebook",  desc:"النشر على إنستغرام وفيسبوك",       where:"developers.facebook.com  ←  Apps",         ph:"EAAxxxxxxxxxxxxxxxx" },
   { id:"tiktok",    name:"TikTok",           desc:"النشر على تيك توك",                 where:"developers.tiktok.com  ←  Apps  ←  Keys", ph:"xxxx-xxxx-xxxx-xxxx" },
 ];
 
@@ -28,17 +27,6 @@ const API_GUIDES = {
       "اضغط \"Create Key\" وأعطه اسم مثل \"Choga\"",
       "انسخ المفتاح فوراً (يبدأ بـ sk-ant-...) — لن يظهر مرة ثانية",
       "الصقه بالخانة أعلاه ثم اضغط \"حفظ الإعدادات\" بالأسفل",
-    ],
-  },
-  meta: {
-    url: "https://developers.facebook.com/apps",
-    steps: [
-      "افتح الرابط أدناه وسجّل دخول بحساب فيسبوك الخاص بالمحل",
-      "اضغط \"My Apps\" ← \"Create App\" ← اختر نوع \"Business\"",
-      "من إعدادات التطبيق أضف منتج \"Facebook Login\" و\"Instagram Graph API\"",
-      "اربط صفحة الفيسبوك وحساب إنستغرام (Business) بالتطبيق من إعدادات الأعمال",
-      "من \"Graph API Explorer\" اختر تطبيقك واطلب الصلاحيات: pages_manage_posts, pages_read_engagement, instagram_basic, instagram_content_publish",
-      "اضغط \"Generate Access Token\" وانسخه (يفضّل تحويله لاحقاً إلى Long-Lived Token)",
     ],
   },
   tiktok: {
@@ -65,7 +53,7 @@ const DEF = {
   occasions:["أعراس","عيد الفطر","عيد الأضحى","رمضان"],
   priceRange:"", extra:"",
   platforms:{ instagram:"choga.yo", facebook:"CHOGA", snapchat:"", tiktok:"", whatsapp:"" },
-  api:{ anthropic:"", meta:"", tiktok:"" },
+  api:{ anthropic:"", tiktok:"" },
 };
 
 export default function SettingsPage() {
