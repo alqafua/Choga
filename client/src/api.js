@@ -82,3 +82,16 @@ export const updateOrder = (id, data) =>
   request(`/api/orders/${id}`, { method: "PUT", body: JSON.stringify(data) }).then((r) => r.json());
 export const deleteOrder = (id) =>
   request(`/api/orders/${id}`, { method: "DELETE" }).then((r) => r.json());
+
+// ── content plan ─────────────────────────────────────────────
+export const listContent = () => request("/api/content").then((r) => r.json());
+export const createContent = (data) =>
+  request("/api/content", { method: "POST", body: JSON.stringify(data) }).then((r) => r.json());
+export const updateContent = (id, data) =>
+  request(`/api/content/${id}`, { method: "PUT", body: JSON.stringify(data) }).then((r) => r.json());
+export const deleteContent = (id) =>
+  request(`/api/content/${id}`, { method: "DELETE" }).then((r) => r.json());
+
+// ── AI content generation ───────────────────────────────────
+export const generateContent = (data) =>
+  request("/api/generate", { method: "POST", body: JSON.stringify(data) }).then((r) => r.json());

@@ -4,6 +4,11 @@ import Layout from "./Layout";
 import SettingsPage from "./SettingsPage";
 import CustomersPage from "./CustomersPage";
 import OrdersPage from "./OrdersPage";
+import AnalyticsPage from "./AnalyticsPage";
+import PlanPage from "./PlanPage";
+import CreatorPage from "./CreatorPage";
+import ReviewPage from "./ReviewPage";
+import PublishPage from "./PublishPage";
 import ComingSoon from "./ComingSoon";
 import { checkAuth } from "./api";
 import { C, fontImport } from "./theme";
@@ -12,6 +17,11 @@ const PAGES = {
   settings: SettingsPage,
   customers: CustomersPage,
   orders: OrdersPage,
+  analytics: AnalyticsPage,
+  plan: PlanPage,
+  creator: CreatorPage,
+  review: ReviewPage,
+  publish: PublishPage,
 };
 
 export default function App() {

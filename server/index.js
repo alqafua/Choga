@@ -22,6 +22,7 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const customers = makeStore(DATA_DIR, "customers.json");
 const orders = makeStore(DATA_DIR, "orders.json");
+const content = makeStore(DATA_DIR, "content.json");
 
 const INSTAGRAM_APP_ID = process.env.INSTAGRAM_APP_ID || "";
 const INSTAGRAM_APP_SECRET = process.env.INSTAGRAM_APP_SECRET || "";
@@ -145,6 +146,92 @@ app.put("/api/orders/:id", requireAuth, (req, res) => {
 app.delete("/api/orders/:id", requireAuth, (req, res) => {
   if (!orders.remove(req.params.id)) return res.status(404).json({ error: "not found" });
   res.json({ ok: true });
+});
+
+// ── content plan (calendar / creator / review / publish) ────────
+app.get("/api/content", requireAuth, (req, res) => {
+  res.json(content.list());
+});
+
+app.post("/api/content", requireAuth, (req, res) => {
+  res.status(201).json(content.create(req.body ?? {}));
+});
+
+app.put("/api/content/:id", requireAuth, (req, res) => {
+  const updated = content.update(req.params.id, req.body ?? {});
+  if (!updated) return res.status(404).json({ error: "not found" });
+  res.json(updated);
+});
+
+app.delete("/api/content/:id", requireAuth, (req, res) => {
+  if (!content.remove(req.params.id)) return res.status(404).json({ error: "not found" });
+  res.json({ ok: true });
+});
+
+// ── AI content generation (Anthropic) ────────────────────────────
+app.post("/api/generate", requireAuth, async (req, res) => {
+  let settings = {};
+  try {
+    settings = JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
+  } catch {
+    settings = {};
+  }
+
+  const apiKey = settings?.api?.anthropic;
+  if (!apiKey) return res.status(400).json({ ok: false, error: "missing_api_key" });
+
+  const { platform, occasion, type, notes } = req.body || {};
+
+  const brandLines = [
+    `اسم المتجر: ${settings.nameAr || settings.name || "—"}`,
+    settings.type && `النشاط: ${settings.type}`,
+    settings.location && `الموقع: ${settings.location}`,
+    settings.tagline && `الشعار: ${settings.tagline}`,
+    settings.description && `الوصف: ${settings.description}`,
+    settings.audience && `الجمهور المستهدف: ${settings.audience}${settings.audienceAge ? ` (الفئة العمرية: ${settings.audienceAge})` : ""}`,
+    settings.tone && `نبرة الكتابة: ${settings.tone}`,
+    Array.isArray(settings.traits) && settings.traits.length && `شخصية العلامة: ${settings.traits.join("، ")}`,
+    settings.products && `المنتجات والخدمات: ${settings.products}`,
+    settings.extra && `ملاحظات إضافية: ${settings.extra}`,
+  ].filter(Boolean).join("\n");
+
+  const requestLines = [
+    platform && `المنصة: ${platform}`,
+    occasion && `المناسبة: ${occasion}`,
+    type && `نوع المحتوى: ${type}`,
+    notes && `تفاصيل إضافية من الفريق: ${notes}`,
+  ].filter(Boolean).join("\n");
+
+  const systemPrompt = `أنت كاتب محتوى تسويقي محترف متخصص بالعربية لإدارة وسائل التواصل الاجتماعي. اكتب نصاً جاهزاً للنشر (caption) يناسب العلامة التالية:\n\n${brandLines}\n\nاكتب بالعربية الفصحى السهلة أو لهجة راقية تناسب الجمهور، أضف هاشتاقات مناسبة إن كانت تخدم المنصة، ولا تشرح ما كتبته — أعد فقط النص الجاهز للنشر.`;
+
+  const userPrompt = requestLines || "اكتب منشوراً تسويقياً عاماً يناسب العلامة.";
+
+  try {
+    const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+      }),
+    });
+    const data = await aiRes.json();
+    if (data.error) {
+      console.error("anthropic error:", data.error);
+      return res.status(500).json({ ok: false, error: data.error.message || "ai_error" });
+    }
+    const text = data.content?.map((b) => b.text || "").join("") || "";
+    res.json({ ok: true, text });
+  } catch (err) {
+    console.error("generate error:", err);
+    res.status(500).json({ ok: false, error: "generation_failed" });
+  }
 });
 
 // ── instagram (business login) connection ──────────────────────
