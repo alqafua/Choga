@@ -61,6 +61,8 @@ export async function saveSettings(data) {
 
 // ── meta (facebook / instagram) connection ──────────────────────
 export const getMetaStatus = () => request("/api/meta/status").then((r) => r.json());
+export const connectMetaToken = (token) =>
+  request("/api/meta/token", { method: "POST", body: JSON.stringify({ token }) }).then((r) => r.json());
 export const disconnectMeta = () => request("/api/meta/disconnect", { method: "POST" }).then((r) => r.json());
 
 // ── customers ─────────────────────────────────────────────────

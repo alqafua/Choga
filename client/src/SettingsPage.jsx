@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { C, card, lbl, subHead, fieldStyle, chipStyle, primaryBtn, dangerBtn } from "./theme";
-import { getSettings, saveSettings, getMetaStatus, disconnectMeta } from "./api";
+import { getSettings, saveSettings, getMetaStatus, connectMetaToken, disconnectMeta } from "./api";
 
 const TONES     = ["راقٍ وودّي","احترافي","حماسي","عاطفي","بسيط وصريح"];
 const TRAITS    = ["فاخر","حرفي","دافئ","مناسباتي","ودّي","مبدع","موثوق","أنيق"];
@@ -111,10 +111,33 @@ export default function SettingsPage() {
     })();
   },[]);
 
+  const [metaToken, setMetaToken] = useState("");
+  const [metaConnecting, setMetaConnecting] = useState(false);
+  const [metaTokenMsg, setMetaTokenMsg] = useState("");
+
   const handleMetaDisconnect = async () => {
     if (!window.confirm("هل تريد إلغاء ربط إنستغرام؟")) return;
     await disconnectMeta();
     setMeta(await getMetaStatus());
+  };
+
+  const handleMetaTokenConnect = async () => {
+    if (!metaToken.trim()) return;
+    setMetaConnecting(true);
+    setMetaTokenMsg("");
+    try {
+      const res = await connectMetaToken(metaToken.trim());
+      if (res.ok) {
+        setMetaToken("");
+        setMetaTokenMsg("");
+        setMeta(await getMetaStatus());
+      } else {
+        setMetaTokenMsg("الرمز غير صحيح أو منتهي — تأكد من نسخه كاملاً");
+      }
+    } catch {
+      setMetaTokenMsg("تعذّر التحقق من الرمز — حاول مجدداً");
+    }
+    setMetaConnecting(false);
   };
 
   const up  = (k,v) => setData(d=>({...d,[k]:v}));
@@ -261,9 +284,7 @@ export default function SettingsPage() {
             {metaMsg && (
               <div style={{fontSize:12, color: metaMsg.includes("نجاح") ? C.green : C.red, marginBottom:10, lineHeight:1.7}}>{metaMsg}</div>
             )}
-            {!meta?.configured ? (
-              <p style={{fontSize:12,color:C.muted,lineHeight:1.7}}>الربط التلقائي غير مفعّل على الخادم بعد — يحتاج إضافة INSTAGRAM_APP_ID و INSTAGRAM_APP_SECRET في متغيرات Railway.</p>
-            ) : meta?.connected ? (
+            {meta?.connected ? (
               <>
                 <div style={{fontSize:13,marginBottom:12,lineHeight:1.8}}>
                   <span style={{color:C.green,fontWeight:700}}>متصل ✓</span>
@@ -273,8 +294,31 @@ export default function SettingsPage() {
               </>
             ) : (
               <>
-                <p style={{fontSize:12,color:C.muted,marginBottom:12,lineHeight:1.7}}>اربط حساب إنستغرام التابع للمحل بضغطة واحدة — يسمح بالنشر التلقائي مستقبلاً.</p>
-                <a href="/api/meta/connect" style={{...primaryBtn, display:"inline-block", textDecoration:"none"}}>ربط بإنستغرام</a>
+                <p style={{fontSize:12,color:C.muted,marginBottom:12,lineHeight:1.7}}>
+                  الصق رمز الوصول (Access Token) الذي تُنشئه من لوحة ميتا:
+                  <br/>منتج Instagram ← القسم 2 «إنشاء رمز الوصول» ← أضف حساب ← سجّل دخولك ← انسخ الرمز.
+                </p>
+                <textarea
+                  value={metaToken}
+                  onChange={e=>setMetaToken(e.target.value)}
+                  placeholder="IGQV...الصق الرمز هنا"
+                  style={{...fieldStyle(focus,"metatoken"), resize:"none", height:72, fontFamily:"monospace", fontSize:12, lineHeight:1.5, marginBottom:10}}
+                  onFocus={()=>setFocus("metatoken")}
+                  onBlur={()=>setFocus("")}
+                />
+                {metaTokenMsg && (
+                  <div style={{fontSize:12, color:C.red, marginBottom:10, lineHeight:1.7}}>{metaTokenMsg}</div>
+                )}
+                <button type="button" onClick={handleMetaTokenConnect} disabled={metaConnecting || !metaToken.trim()}
+                  style={{...primaryBtn, opacity: (metaConnecting || !metaToken.trim()) ? 0.5 : 1}}>
+                  {metaConnecting ? "جارٍ الربط…" : "ربط إنستغرام"}
+                </button>
+                {meta?.configured && (
+                  <div style={{marginTop:12, paddingTop:12, borderTop:`1px solid ${C.border}`}}>
+                    <p style={{fontSize:11,color:C.dim,marginBottom:8,lineHeight:1.7}}>أو اربط مباشرة عبر تسجيل الدخول (يحتاج إعداد رابط إعادة التوجيه):</p>
+                    <a href="/api/meta/connect" style={{...primaryBtn, display:"inline-block", textDecoration:"none", background:"transparent", border:`1px solid ${C.accent}`, color:C.accent}}>ربط عبر تسجيل الدخول</a>
+                  </div>
+                )}
               </>
             )}
           </div>
