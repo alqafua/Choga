@@ -425,20 +425,39 @@ app.post("/api/meta/token", requireAuth, async (req, res) => {
       }
     }
 
+    // Path 1: Instagram Business Login token (graph.instagram.com).
     const meRes = await fetch(`${IG_GRAPH}/me?fields=user_id,username&access_token=${accessToken}`);
     const meData = await meRes.json();
-    if (!meData || (!meData.user_id && !meData.username)) {
-      return res.status(400).json({ ok: false, error: "invalid token" });
+    if (meData && (meData.user_id || meData.username)) {
+      writeMetaConnection({
+        igUserId: meData.user_id || null,
+        igUsername: meData.username || null,
+        accessToken,
+        connectedAt: new Date().toISOString(),
+      });
+      return res.json({ ok: true, igUsername: meData.username || null });
     }
 
-    writeMetaConnection({
-      igUserId: meData.user_id || null,
-      igUsername: meData.username || null,
-      accessToken,
-      connectedAt: new Date().toISOString(),
-    });
+    // Path 2: Facebook access token — find the connected Instagram
+    // business account via the user's Pages.
+    const pagesRes = await fetch(
+      `https://graph.facebook.com/v21.0/me/accounts?fields=name,instagram_business_account{id,username}&access_token=${accessToken}`
+    );
+    const pagesData = await pagesRes.json();
+    const pageWithIg = (pagesData.data || []).find((p) => p.instagram_business_account);
+    if (pageWithIg) {
+      const ig = pageWithIg.instagram_business_account;
+      writeMetaConnection({
+        igUserId: ig.id,
+        igUsername: ig.username || null,
+        pageId: pageWithIg.id,
+        accessToken,
+        connectedAt: new Date().toISOString(),
+      });
+      return res.json({ ok: true, igUsername: ig.username || null });
+    }
 
-    res.json({ ok: true, igUsername: meData.username || null });
+    res.status(400).json({ ok: false, error: "invalid token" });
   } catch (err) {
     console.error("instagram token connect error:", err);
     res.status(500).json({ ok: false, error: "could not verify token" });
