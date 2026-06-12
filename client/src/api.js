@@ -82,3 +82,47 @@ export const updateOrder = (id, data) =>
   request(`/api/orders/${id}`, { method: "PUT", body: JSON.stringify(data) }).then((r) => r.json());
 export const deleteOrder = (id) =>
   request(`/api/orders/${id}`, { method: "DELETE" }).then((r) => r.json());
+
+// ── content plan ─────────────────────────────────────────────
+export const listContent = () => request("/api/content").then((r) => r.json());
+export const createContent = (data) =>
+  request("/api/content", { method: "POST", body: JSON.stringify(data) }).then((r) => r.json());
+export const updateContent = (id, data) =>
+  request(`/api/content/${id}`, { method: "PUT", body: JSON.stringify(data) }).then((r) => r.json());
+export const deleteContent = (id) =>
+  request(`/api/content/${id}`, { method: "DELETE" }).then((r) => r.json());
+
+// ── assets (raw materials library) ───────────────────────────
+export const listAssets = () => request("/api/assets").then((r) => r.json());
+export const createAsset = (data) =>
+  request("/api/assets", { method: "POST", body: JSON.stringify(data) }).then((r) => r.json());
+export const updateAsset = (id, data) =>
+  request(`/api/assets/${id}`, { method: "PUT", body: JSON.stringify(data) }).then((r) => r.json());
+export const deleteAsset = (id) =>
+  request(`/api/assets/${id}`, { method: "DELETE" }).then((r) => r.json());
+
+// ── research (ideas board) ───────────────────────────────────
+export const listResearch = () => request("/api/research").then((r) => r.json());
+export const createResearch = (data) =>
+  request("/api/research", { method: "POST", body: JSON.stringify(data) }).then((r) => r.json());
+export const updateResearch = (id, data) =>
+  request(`/api/research/${id}`, { method: "PUT", body: JSON.stringify(data) }).then((r) => r.json());
+export const deleteResearch = (id) =>
+  request(`/api/research/${id}`, { method: "DELETE" }).then((r) => r.json());
+
+// ── replies (saved quick replies) ────────────────────────────
+export const listReplies = () => request("/api/replies").then((r) => r.json());
+export const createReply = (data) =>
+  request("/api/replies", { method: "POST", body: JSON.stringify(data) }).then((r) => r.json());
+export const updateReply = (id, data) =>
+  request(`/api/replies/${id}`, { method: "PUT", body: JSON.stringify(data) }).then((r) => r.json());
+export const deleteReply = (id) =>
+  request(`/api/replies/${id}`, { method: "DELETE" }).then((r) => r.json());
+
+// ── AI generation ────────────────────────────────────────────
+export const generateContent = (data) =>
+  request("/api/generate", { method: "POST", body: JSON.stringify(data) }).then((r) => r.json());
+export const generateIdeas = (data) =>
+  request("/api/ideas", { method: "POST", body: JSON.stringify(data) }).then((r) => r.json());
+export const draftReply = (message) =>
+  request("/api/reply", { method: "POST", body: JSON.stringify({ message }) }).then((r) => r.json());

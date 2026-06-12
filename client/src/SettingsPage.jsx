@@ -1,10 +1,9 @@
 import { useState, useEffect } from "react";
-import { C, card, lbl, subHead, fieldStyle, chipStyle, primaryBtn, dangerBtn } from "./theme";
+import { C, card, lbl, subHead, fieldStyle, chipStyle, primaryBtn, dangerBtn, OCCASIONS } from "./theme";
 import { getSettings, saveSettings, getMetaStatus, connectMetaToken, disconnectMeta } from "./api";
 
 const TONES     = ["راقٍ وودّي","احترافي","حماسي","عاطفي","بسيط وصريح"];
 const TRAITS    = ["فاخر","حرفي","دافئ","مناسباتي","ودّي","مبدع","موثوق","أنيق"];
-const OCCASIONS = ["أعراس","عيد الفطر","عيد الأضحى","رمضان","أعياد ميلاد","تخرج","عيد الأم","خطوبة"];
 
 const PLATFORMS = [
   { id:"instagram", name:"إنستغرام",  color:"#E1306C", icon:"📸", prefix:"@",    note:null },

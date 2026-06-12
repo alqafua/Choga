@@ -12,4 +12,7 @@ export const NAV = [
   { id:"settings",  label:"الإعدادات", icon:"⚙️" },
 ];
 
-export const READY_NAV = new Set(["customers", "orders", "settings"]);
+export const READY_NAV = new Set([
+  "assets", "research", "plan", "creator", "review", "publish",
+  "inbox", "analytics", "customers", "orders", "settings",
+]);

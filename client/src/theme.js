@@ -102,3 +102,47 @@ export const ORDER_STATUSES = [
 ];
 
 export const statusInfo = (id) => ORDER_STATUSES.find((s) => s.id === id) || ORDER_STATUSES[0];
+
+// ─── content / social platforms ───────────────────────────────
+export const OCCASIONS = ["أعراس","عيد الفطر","عيد الأضحى","رمضان","أعياد ميلاد","تخرج","عيد الأم","خطوبة"];
+
+export const PLATFORMS = [
+  { id:"instagram", name:"إنستغرام",  color:"#E1306C", icon:"📸" },
+  { id:"facebook",  name:"فيسبوك",    color:"#4A90D9", icon:"📘" },
+  { id:"snapchat",  name:"سناب شات", color:"#F5D020", icon:"👻" },
+  { id:"tiktok",    name:"تيك توك",   color:"#69C9D0", icon:"🎵" },
+  { id:"whatsapp",  name:"واتساب",    color:"#25D366", icon:"💬" },
+];
+
+export const platformInfo = (id) => PLATFORMS.find((p) => p.id === id) || PLATFORMS[0];
+
+export const CONTENT_STATUSES = [
+  { id: "draft",     label: "مسودة",         color: C.muted },
+  { id: "review",    label: "قيد المراجعة",   color: C.purple },
+  { id: "ready",     label: "جاهز للنشر",     color: C.accent },
+  { id: "published", label: "تم النشر",       color: C.green },
+];
+
+export const contentStatusInfo = (id) => CONTENT_STATUSES.find((s) => s.id === id) || CONTENT_STATUSES[0];
+
+export const CONTENT_TYPES = ["منشور", "ستوري", "ريل", "إعلان"];
+
+// ─── assets (raw materials library) ────────────────────────────
+export const ASSET_TYPES = [
+  { id: "image",   label: "صورة",       icon: "🖼️", color: C.blue },
+  { id: "hashtag", label: "هاشتاقات",   icon: "#️⃣", color: C.purple },
+  { id: "snippet", label: "نص جاهز",    icon: "📝", color: C.accent },
+  { id: "link",    label: "رابط",       icon: "🔗", color: C.green },
+];
+export const assetTypeInfo = (id) => ASSET_TYPES.find((t) => t.id === id) || ASSET_TYPES[0];
+
+// ─── research (ideas board) ────────────────────────────────────
+export const IDEA_STATUSES = [
+  { id: "idea",     label: "فكرة",      color: C.muted },
+  { id: "using",    label: "قيد الاستخدام", color: C.accent },
+  { id: "archived", label: "مؤرشفة",    color: C.dim },
+];
+export const ideaStatusInfo = (id) => IDEA_STATUSES.find((s) => s.id === id) || IDEA_STATUSES[0];
+
+// ─── replies (saved quick replies) ─────────────────────────────
+export const REPLY_CATEGORIES = ["الأسعار", "التوصيل", "الطلب", "المواعيد", "عام"];
