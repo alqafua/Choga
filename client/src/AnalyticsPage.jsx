@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { C, card, subHead, ORDER_STATUSES } from "./theme";
-import { listOrders, listCustomers } from "./api";
+import { listOrders, listCustomers, getMetaInsights } from "./api";
 
 const fmt = (n) => new Intl.NumberFormat("ar").format(Math.round(n));
 
@@ -21,6 +21,8 @@ export default function AnalyticsPage() {
   const [orders, setOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [insights, setInsights] = useState(null);
+  const [insightsLoading, setInsightsLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -33,6 +35,13 @@ export default function AnalyticsPage() {
         setCustomers([]);
       }
       setLoading(false);
+    })();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try { setInsights(await getMetaInsights()); } catch { setInsights(null); }
+      setInsightsLoading(false);
     })();
   }, []);
 
@@ -84,6 +93,55 @@ export default function AnalyticsPage() {
               </div>
             ))}
           </div>
+
+          {/* social media insights */}
+          {!insightsLoading && insights?.connected && (insights.instagram || insights.facebook) && (
+            <div style={card}>
+              <div style={subHead}>أداء حسابات التواصل</div>
+              <div style={{display:"flex", flexWrap:"wrap", gap:10, marginBottom: (insights.instagram?.recentMedia?.length ? 14 : 0)}}>
+                {insights.instagram && (
+                  <div style={{flex:"1 1 140px", display:"flex", alignItems:"center", gap:10, background:C.inp, borderRadius:12, padding:"10px 12px"}}>
+                    {insights.instagram.profilePic ? (
+                      <img src={insights.instagram.profilePic} alt="" style={{width:36,height:36,borderRadius:10,objectFit:"cover"}} />
+                    ) : (
+                      <div style={{width:36,height:36,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,background:"#E1306C18",border:"1px solid #E1306C30"}}>📸</div>
+                    )}
+                    <div>
+                      <div style={{fontSize:16, fontWeight:800}}>{insights.instagram.followers != null ? fmt(insights.instagram.followers) : "—"}</div>
+                      <div style={{fontSize:11, color:C.muted}}>متابعين إنستغرام {insights.instagram.username ? `@${insights.instagram.username}` : ""}</div>
+                    </div>
+                  </div>
+                )}
+                {insights.facebook && (
+                  <div style={{flex:"1 1 140px", display:"flex", alignItems:"center", gap:10, background:C.inp, borderRadius:12, padding:"10px 12px"}}>
+                    {insights.facebook.picture ? (
+                      <img src={insights.facebook.picture} alt="" style={{width:36,height:36,borderRadius:10,objectFit:"cover"}} />
+                    ) : (
+                      <div style={{width:36,height:36,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,background:`${C.blue}18`,border:`1px solid ${C.blue}30`}}>📘</div>
+                    )}
+                    <div>
+                      <div style={{fontSize:16, fontWeight:800}}>{insights.facebook.followers != null ? fmt(insights.facebook.followers) : "—"}</div>
+                      <div style={{fontSize:11, color:C.muted}}>متابعين فيسبوك {insights.facebook.name || ""}</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              {insights.instagram?.recentMedia?.length > 0 && (
+                <div style={{display:"flex", gap:8, overflowX:"auto", paddingBottom:4}}>
+                  {insights.instagram.recentMedia.map(m => (
+                    <a key={m.id} href={m.permalink} target="_blank" rel="noopener noreferrer" style={{flexShrink:0, width:96, textDecoration:"none"}}>
+                      {m.media_url && (m.media_type === "VIDEO" ? (
+                        <div style={{width:96, height:96, borderRadius:10, background:C.inp, display:"flex", alignItems:"center", justifyContent:"center", fontSize:24}}>🎬</div>
+                      ) : (
+                        <img src={m.media_url} alt="" style={{width:96, height:96, objectFit:"cover", borderRadius:10}} onError={(e)=>{e.target.style.display="none";}} />
+                      ))}
+                      <div style={{fontSize:11, color:C.muted, marginTop:4, textAlign:"center"}}>❤️ {m.like_count ?? 0} 💬 {m.comments_count ?? 0}</div>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* orders by status */}
           <div style={card}>

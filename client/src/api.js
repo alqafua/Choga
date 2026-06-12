@@ -61,6 +61,7 @@ export async function saveSettings(data) {
 
 // ── meta (facebook / instagram) connection ──────────────────────
 export const getMetaStatus = () => request("/api/meta/status").then((r) => r.json());
+export const getMetaInsights = () => request("/api/meta/insights").then((r) => r.json());
 export const connectMetaToken = (token) =>
   request("/api/meta/token", { method: "POST", body: JSON.stringify({ token }) }).then((r) => r.json());
 export const disconnectMeta = () => request("/api/meta/disconnect", { method: "POST" }).then((r) => r.json());
@@ -126,3 +127,15 @@ export const generateIdeas = (data) =>
   request("/api/ideas", { method: "POST", body: JSON.stringify(data) }).then((r) => r.json());
 export const draftReply = (message) =>
   request("/api/reply", { method: "POST", body: JSON.stringify({ message }) }).then((r) => r.json());
+
+// ── catalog (storefront products) ─────────────────────────────
+export const listCatalog = () => request("/api/catalog").then((r) => r.json());
+export const createCatalogItem = (data) =>
+  request("/api/catalog", { method: "POST", body: JSON.stringify(data) }).then((r) => r.json());
+export const updateCatalogItem = (id, data) =>
+  request(`/api/catalog/${id}`, { method: "PUT", body: JSON.stringify(data) }).then((r) => r.json());
+export const deleteCatalogItem = (id) =>
+  request(`/api/catalog/${id}`, { method: "DELETE" }).then((r) => r.json());
+
+// ── public storefront (no auth) ────────────────────────────────
+export const getPublicStorefront = () => fetch("/api/public/storefront").then((r) => r.json());
