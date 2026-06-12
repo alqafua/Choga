@@ -216,6 +216,49 @@ app.get("/api/meta/callback", async (req, res) => {
   }
 });
 
+// Connect by pasting a token generated in Meta's console
+// (Instagram product > "Generate access token" > Add account).
+// This avoids needing a redirect URI / OAuth callback entirely.
+app.post("/api/meta/token", requireAuth, async (req, res) => {
+  const raw = (req.body?.token || "").trim();
+  if (!raw) return res.status(400).json({ ok: false, error: "missing token" });
+
+  try {
+    // Try to upgrade a short-lived token to a long-lived one (60 days).
+    // If it's already long-lived this just fails harmlessly and we keep the original.
+    let accessToken = raw;
+    if (INSTAGRAM_APP_SECRET) {
+      try {
+        const longRes = await fetch(
+          `${IG_GRAPH}/access_token?grant_type=ig_exchange_token&client_secret=${INSTAGRAM_APP_SECRET}&access_token=${raw}`
+        );
+        const longData = await longRes.json();
+        if (longData.access_token) accessToken = longData.access_token;
+      } catch {
+        // keep the original token
+      }
+    }
+
+    const meRes = await fetch(`${IG_GRAPH}/me?fields=user_id,username&access_token=${accessToken}`);
+    const meData = await meRes.json();
+    if (!meData || (!meData.user_id && !meData.username)) {
+      return res.status(400).json({ ok: false, error: "invalid token" });
+    }
+
+    writeMetaConnection({
+      igUserId: meData.user_id || null,
+      igUsername: meData.username || null,
+      accessToken,
+      connectedAt: new Date().toISOString(),
+    });
+
+    res.json({ ok: true, igUsername: meData.username || null });
+  } catch (err) {
+    console.error("instagram token connect error:", err);
+    res.status(500).json({ ok: false, error: "could not verify token" });
+  }
+});
+
 app.post("/api/meta/disconnect", requireAuth, (req, res) => {
   if (fs.existsSync(META_FILE)) fs.unlinkSync(META_FILE);
   res.json({ ok: true });
