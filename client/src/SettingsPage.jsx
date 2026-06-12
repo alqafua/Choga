@@ -276,6 +276,7 @@ export default function SettingsPage() {
                 <div style={{fontSize:13,marginBottom:12,lineHeight:1.8}}>
                   <span style={{color:C.green,fontWeight:700}}>متصل ✓</span>
                   {meta.igUsername && <> — إنستغرام: <strong>@{meta.igUsername}</strong></>}
+                  {meta.fbPageName && <> — فيسبوك: <strong>{meta.fbPageName}</strong></>}
                 </div>
                 <button type="button" onClick={handleMetaDisconnect} style={dangerBtn}>إلغاء الربط</button>
               </>

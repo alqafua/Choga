@@ -334,12 +334,25 @@ app.post("/api/reply", requireAuth, async (req, res) => {
 });
 
 // ── instagram (business login) connection ──────────────────────
-app.get("/api/meta/status", requireAuth, (req, res) => {
+app.get("/api/meta/status", requireAuth, async (req, res) => {
   const conn = readMetaConnection();
+  let fbPageName = null;
+  if (conn?.pageId && conn?.accessToken) {
+    try {
+      const pageRes = await fetch(
+        `https://graph.facebook.com/v21.0/${conn.pageId}?fields=name&access_token=${conn.accessToken}`
+      );
+      const pageData = await pageRes.json();
+      fbPageName = pageData.name || null;
+    } catch {
+      // token may have expired since connecting — leave fbPageName null
+    }
+  }
   res.json({
     configured: !!(INSTAGRAM_APP_ID && INSTAGRAM_APP_SECRET),
     connected: !!conn,
     igUsername: conn?.igUsername || null,
+    fbPageName,
     connectedAt: conn?.connectedAt || null,
   });
 });
