@@ -79,7 +79,7 @@ export default function SettingsPage() {
   const [meta,    setMeta]    = useState(null);
   const [metaMsg] = useState(() => {
     const result = new URLSearchParams(window.location.search).get("meta");
-    if (result === "connected") return "تم الربط بفيسبوك وإنستغرام بنجاح ✅";
+    if (result === "connected") return "تم ربط إنستغرام بنجاح ✅";
     if (result === "error") return "تعذّر الربط — حاول مجدداً";
     return "";
   });
@@ -112,7 +112,7 @@ export default function SettingsPage() {
   },[]);
 
   const handleMetaDisconnect = async () => {
-    if (!window.confirm("هل تريد إلغاء ربط فيسبوك وإنستغرام؟")) return;
+    if (!window.confirm("هل تريد إلغاء ربط إنستغرام؟")) return;
     await disconnectMeta();
     setMeta(await getMetaStatus());
   };
@@ -257,25 +257,24 @@ export default function SettingsPage() {
         {/* ══ ACCOUNTS ══ */}
         {sec==="accounts" && <>
           <div style={card}>
-            <div style={subHead}>ربط فيسبوك وإنستغرام</div>
+            <div style={subHead}>ربط إنستغرام</div>
             {metaMsg && (
               <div style={{fontSize:12, color: metaMsg.includes("نجاح") ? C.green : C.red, marginBottom:10, lineHeight:1.7}}>{metaMsg}</div>
             )}
             {!meta?.configured ? (
-              <p style={{fontSize:12,color:C.muted,lineHeight:1.7}}>الربط التلقائي غير مفعّل على الخادم بعد — يحتاج إضافة META_APP_ID و META_APP_SECRET في متغيرات Railway.</p>
+              <p style={{fontSize:12,color:C.muted,lineHeight:1.7}}>الربط التلقائي غير مفعّل على الخادم بعد — يحتاج إضافة INSTAGRAM_APP_ID و INSTAGRAM_APP_SECRET في متغيرات Railway.</p>
             ) : meta?.connected ? (
               <>
                 <div style={{fontSize:13,marginBottom:12,lineHeight:1.8}}>
                   <span style={{color:C.green,fontWeight:700}}>متصل ✓</span>
-                  {meta.pageName && <> — صفحة: <strong>{meta.pageName}</strong></>}
-                  {meta.igUsername && <> · إنستغرام: <strong>@{meta.igUsername}</strong></>}
+                  {meta.igUsername && <> — إنستغرام: <strong>@{meta.igUsername}</strong></>}
                 </div>
                 <button type="button" onClick={handleMetaDisconnect} style={dangerBtn}>إلغاء الربط</button>
               </>
             ) : (
               <>
-                <p style={{fontSize:12,color:C.muted,marginBottom:12,lineHeight:1.7}}>اربط صفحة فيسبوك وحساب إنستغرام التابع للمحل بضغطة واحدة — يسمح بالنشر التلقائي مستقبلاً.</p>
-                <a href="/api/meta/connect" style={{...primaryBtn, display:"inline-block", textDecoration:"none"}}>ربط بفيسبوك / إنستغرام</a>
+                <p style={{fontSize:12,color:C.muted,marginBottom:12,lineHeight:1.7}}>اربط حساب إنستغرام التابع للمحل بضغطة واحدة — يسمح بالنشر التلقائي مستقبلاً.</p>
+                <a href="/api/meta/connect" style={{...primaryBtn, display:"inline-block", textDecoration:"none"}}>ربط بإنستغرام</a>
               </>
             )}
           </div>
