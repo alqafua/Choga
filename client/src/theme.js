@@ -126,3 +126,23 @@ export const CONTENT_STATUSES = [
 export const contentStatusInfo = (id) => CONTENT_STATUSES.find((s) => s.id === id) || CONTENT_STATUSES[0];
 
 export const CONTENT_TYPES = ["منشور", "ستوري", "ريل", "إعلان"];
+
+// ─── assets (raw materials library) ────────────────────────────
+export const ASSET_TYPES = [
+  { id: "image",   label: "صورة",       icon: "🖼️", color: C.blue },
+  { id: "hashtag", label: "هاشتاقات",   icon: "#️⃣", color: C.purple },
+  { id: "snippet", label: "نص جاهز",    icon: "📝", color: C.accent },
+  { id: "link",    label: "رابط",       icon: "🔗", color: C.green },
+];
+export const assetTypeInfo = (id) => ASSET_TYPES.find((t) => t.id === id) || ASSET_TYPES[0];
+
+// ─── research (ideas board) ────────────────────────────────────
+export const IDEA_STATUSES = [
+  { id: "idea",     label: "فكرة",      color: C.muted },
+  { id: "using",    label: "قيد الاستخدام", color: C.accent },
+  { id: "archived", label: "مؤرشفة",    color: C.dim },
+];
+export const ideaStatusInfo = (id) => IDEA_STATUSES.find((s) => s.id === id) || IDEA_STATUSES[0];
+
+// ─── replies (saved quick replies) ─────────────────────────────
+export const REPLY_CATEGORIES = ["الأسعار", "التوصيل", "الطلب", "المواعيد", "عام"];

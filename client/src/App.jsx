@@ -9,6 +9,9 @@ import PlanPage from "./PlanPage";
 import CreatorPage from "./CreatorPage";
 import ReviewPage from "./ReviewPage";
 import PublishPage from "./PublishPage";
+import AssetsPage from "./AssetsPage";
+import ResearchPage from "./ResearchPage";
+import InboxPage from "./InboxPage";
 import ComingSoon from "./ComingSoon";
 import { checkAuth } from "./api";
 import { C, fontImport } from "./theme";
@@ -22,6 +25,9 @@ const PAGES = {
   creator: CreatorPage,
   review: ReviewPage,
   publish: PublishPage,
+  assets: AssetsPage,
+  research: ResearchPage,
+  inbox: InboxPage,
 };
 
 export default function App() {

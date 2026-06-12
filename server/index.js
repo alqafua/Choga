@@ -23,6 +23,9 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 const customers = makeStore(DATA_DIR, "customers.json");
 const orders = makeStore(DATA_DIR, "orders.json");
 const content = makeStore(DATA_DIR, "content.json");
+const assets = makeStore(DATA_DIR, "assets.json");
+const research = makeStore(DATA_DIR, "research.json");
+const replies = makeStore(DATA_DIR, "replies.json");
 
 const INSTAGRAM_APP_ID = process.env.INSTAGRAM_APP_ID || "";
 const INSTAGRAM_APP_SECRET = process.env.INSTAGRAM_APP_SECRET || "";
@@ -168,21 +171,56 @@ app.delete("/api/content/:id", requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// ── AI content generation (Anthropic) ────────────────────────────
-app.post("/api/generate", requireAuth, async (req, res) => {
-  let settings = {};
+// ── assets (raw materials / reusable library) ──────────────────
+app.get("/api/assets", requireAuth, (req, res) => res.json(assets.list()));
+app.post("/api/assets", requireAuth, (req, res) => res.status(201).json(assets.create(req.body ?? {})));
+app.put("/api/assets/:id", requireAuth, (req, res) => {
+  const updated = assets.update(req.params.id, req.body ?? {});
+  if (!updated) return res.status(404).json({ error: "not found" });
+  res.json(updated);
+});
+app.delete("/api/assets/:id", requireAuth, (req, res) => {
+  if (!assets.remove(req.params.id)) return res.status(404).json({ error: "not found" });
+  res.json({ ok: true });
+});
+
+// ── research (ideas board) ─────────────────────────────────────
+app.get("/api/research", requireAuth, (req, res) => res.json(research.list()));
+app.post("/api/research", requireAuth, (req, res) => res.status(201).json(research.create(req.body ?? {})));
+app.put("/api/research/:id", requireAuth, (req, res) => {
+  const updated = research.update(req.params.id, req.body ?? {});
+  if (!updated) return res.status(404).json({ error: "not found" });
+  res.json(updated);
+});
+app.delete("/api/research/:id", requireAuth, (req, res) => {
+  if (!research.remove(req.params.id)) return res.status(404).json({ error: "not found" });
+  res.json({ ok: true });
+});
+
+// ── replies (saved quick replies) ──────────────────────────────
+app.get("/api/replies", requireAuth, (req, res) => res.json(replies.list()));
+app.post("/api/replies", requireAuth, (req, res) => res.status(201).json(replies.create(req.body ?? {})));
+app.put("/api/replies/:id", requireAuth, (req, res) => {
+  const updated = replies.update(req.params.id, req.body ?? {});
+  if (!updated) return res.status(404).json({ error: "not found" });
+  res.json(updated);
+});
+app.delete("/api/replies/:id", requireAuth, (req, res) => {
+  if (!replies.remove(req.params.id)) return res.status(404).json({ error: "not found" });
+  res.json({ ok: true });
+});
+
+// ── AI helpers (Anthropic) ─────────────────────────────────────
+function readSettings() {
   try {
-    settings = JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
+    return JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
   } catch {
-    settings = {};
+    return {};
   }
+}
 
-  const apiKey = settings?.api?.anthropic;
-  if (!apiKey) return res.status(400).json({ ok: false, error: "missing_api_key" });
-
-  const { platform, occasion, type, notes } = req.body || {};
-
-  const brandLines = [
+function buildBrandContext(settings) {
+  return [
     `اسم المتجر: ${settings.nameAr || settings.name || "—"}`,
     settings.type && `النشاط: ${settings.type}`,
     settings.location && `الموقع: ${settings.location}`,
@@ -194,7 +232,39 @@ app.post("/api/generate", requireAuth, async (req, res) => {
     settings.products && `المنتجات والخدمات: ${settings.products}`,
     settings.extra && `ملاحظات إضافية: ${settings.extra}`,
   ].filter(Boolean).join("\n");
+}
 
+async function callClaude(apiKey, system, user, maxTokens = 1024) {
+  const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: maxTokens,
+      system,
+      messages: [{ role: "user", content: user }],
+    }),
+  });
+  const data = await aiRes.json();
+  if (data.error) {
+    const err = new Error(data.error.message || "ai_error");
+    err.anthropic = true;
+    throw err;
+  }
+  return data.content?.map((b) => b.text || "").join("") || "";
+}
+
+// ── AI: content caption generation ─────────────────────────────
+app.post("/api/generate", requireAuth, async (req, res) => {
+  const settings = readSettings();
+  const apiKey = settings?.api?.anthropic;
+  if (!apiKey) return res.status(400).json({ ok: false, error: "missing_api_key" });
+
+  const { platform, occasion, type, notes } = req.body || {};
   const requestLines = [
     platform && `المنصة: ${platform}`,
     occasion && `المناسبة: ${occasion}`,
@@ -202,35 +272,64 @@ app.post("/api/generate", requireAuth, async (req, res) => {
     notes && `تفاصيل إضافية من الفريق: ${notes}`,
   ].filter(Boolean).join("\n");
 
-  const systemPrompt = `أنت كاتب محتوى تسويقي محترف متخصص بالعربية لإدارة وسائل التواصل الاجتماعي. اكتب نصاً جاهزاً للنشر (caption) يناسب العلامة التالية:\n\n${brandLines}\n\nاكتب بالعربية الفصحى السهلة أو لهجة راقية تناسب الجمهور، أضف هاشتاقات مناسبة إن كانت تخدم المنصة، ولا تشرح ما كتبته — أعد فقط النص الجاهز للنشر.`;
-
+  const systemPrompt = `أنت كاتب محتوى تسويقي محترف متخصص بالعربية لإدارة وسائل التواصل الاجتماعي. اكتب نصاً جاهزاً للنشر (caption) يناسب العلامة التالية:\n\n${buildBrandContext(settings)}\n\nاكتب بالعربية الفصحى السهلة أو لهجة راقية تناسب الجمهور، أضف هاشتاقات مناسبة إن كانت تخدم المنصة، ولا تشرح ما كتبته — أعد فقط النص الجاهز للنشر.`;
   const userPrompt = requestLines || "اكتب منشوراً تسويقياً عاماً يناسب العلامة.";
 
   try {
-    const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1024,
-        system: systemPrompt,
-        messages: [{ role: "user", content: userPrompt }],
-      }),
-    });
-    const data = await aiRes.json();
-    if (data.error) {
-      console.error("anthropic error:", data.error);
-      return res.status(500).json({ ok: false, error: data.error.message || "ai_error" });
-    }
-    const text = data.content?.map((b) => b.text || "").join("") || "";
+    const text = await callClaude(apiKey, systemPrompt, userPrompt);
     res.json({ ok: true, text });
   } catch (err) {
     console.error("generate error:", err);
-    res.status(500).json({ ok: false, error: "generation_failed" });
+    res.status(500).json({ ok: false, error: err.anthropic ? err.message : "generation_failed" });
+  }
+});
+
+// ── AI: content ideas (research board) ─────────────────────────
+app.post("/api/ideas", requireAuth, async (req, res) => {
+  const settings = readSettings();
+  const apiKey = settings?.api?.anthropic;
+  if (!apiKey) return res.status(400).json({ ok: false, error: "missing_api_key" });
+
+  const { topic, occasion } = req.body || {};
+  const focus = [
+    topic && `الموضوع/التركيز: ${topic}`,
+    occasion && `المناسبة: ${occasion}`,
+  ].filter(Boolean).join("\n");
+
+  const systemPrompt = `أنت خبير تسويق عبر وسائل التواصل الاجتماعي. اقترح أفكار محتوى إبداعية وقابلة للتنفيذ تناسب العلامة التالية:\n\n${buildBrandContext(settings)}\n\nأعد بالضبط 6 أفكار، كل فكرة في سطر مستقل يبدأ بعلامة «- »، كل فكرة جملة واحدة واضحة وعملية بالعربية. لا تضف مقدمة ولا خاتمة ولا ترقيم — فقط الأسطر الستة.`;
+  const userPrompt = focus || "اقترح أفكار محتوى متنوعة تناسب العلامة.";
+
+  try {
+    const text = await callClaude(apiKey, systemPrompt, userPrompt);
+    const ideas = text.split("\n")
+      .map((l) => l.replace(/^[-•*\d.\s]+/, "").trim())
+      .filter(Boolean);
+    res.json({ ok: true, ideas });
+  } catch (err) {
+    console.error("ideas error:", err);
+    res.status(500).json({ ok: false, error: err.anthropic ? err.message : "generation_failed" });
+  }
+});
+
+// ── AI: draft a reply to a customer message ────────────────────
+app.post("/api/reply", requireAuth, async (req, res) => {
+  const settings = readSettings();
+  const apiKey = settings?.api?.anthropic;
+  if (!apiKey) return res.status(400).json({ ok: false, error: "missing_api_key" });
+
+  const { message } = req.body || {};
+  if (!message || !String(message).trim()) {
+    return res.status(400).json({ ok: false, error: "missing_message" });
+  }
+
+  const systemPrompt = `أنت مسؤول خدمة العملاء لهذه العلامة وتردّ على رسائل العملاء على وسائل التواصل:\n\n${buildBrandContext(settings)}\n\nاكتب رداً مهذباً ودوداً ومناسباً لنبرة العلامة بالعربية. كن مختصراً ومباشراً وواضحاً. إن كان السؤال عن السعر أو التوفر ولا تملك المعلومة، اطلب التفاصيل بلطف ووجّه العميل للتواصل. أعد فقط نص الرد الجاهز للإرسال.`;
+
+  try {
+    const text = await callClaude(apiKey, systemPrompt, String(message).trim(), 600);
+    res.json({ ok: true, text });
+  } catch (err) {
+    console.error("reply error:", err);
+    res.status(500).json({ ok: false, error: err.anthropic ? err.message : "generation_failed" });
   }
 });
 
