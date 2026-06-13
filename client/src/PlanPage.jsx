@@ -6,7 +6,7 @@ const todayStr = () => new Date().toISOString().slice(0, 10);
 
 const emptyForm = () => ({
   title: "", platform: "instagram", occasion: "", type: CONTENT_TYPES[0],
-  scheduledDate: todayStr(), caption: "", image: "", notes: "", status: "draft",
+  scheduledDate: todayStr(), caption: "", image: "", video: "", notes: "", status: "draft",
 });
 
 export default function PlanPage() {
@@ -53,6 +53,7 @@ export default function PlanPage() {
       scheduledDate: item.scheduledDate || todayStr(),
       caption: item.caption || "",
       image: item.image || "",
+      video: item.video || "",
       notes: item.notes || "",
       status: item.status || "draft",
     });
@@ -179,12 +180,22 @@ export default function PlanPage() {
           </div>
 
           <div style={{marginBottom:14}}>
-            <label style={lbl}>رابط الصورة (مطلوب للنشر التلقائي على إنستغرام)</label>
+            <label style={lbl}>رابط الصورة (مطلوب للنشر التلقائي على إنستغرام/تيك توك)</label>
             <input style={{...iStyle("image"),direction:"ltr",textAlign:"right",fontFamily:"monospace",fontSize:12}} value={form.image} onFocus={()=>setFocus("image")} onBlur={()=>setFocus("")} onChange={e=>upF("image",e.target.value)} placeholder="https://...الصق رابط الصورة" />
             {form.image && (
               <img src={form.image} alt="" style={{width:"100%",maxHeight:140,objectFit:"cover",borderRadius:12,marginTop:10,border:`1px solid ${C.border}`}} onError={(e)=>{e.target.style.display="none";}} onLoad={(e)=>{e.target.style.display="block";}} />
             )}
           </div>
+
+          {form.platform === "youtube" && (
+            <div style={{marginBottom:14}}>
+              <label style={lbl}>رابط الفيديو (mp4 — مطلوب للنشر التلقائي على يوتيوب شورتس)</label>
+              <input style={{...iStyle("video"),direction:"ltr",textAlign:"right",fontFamily:"monospace",fontSize:12}} value={form.video} onFocus={()=>setFocus("video")} onBlur={()=>setFocus("")} onChange={e=>upF("video",e.target.value)} placeholder="https://...الصق رابط الفيديو" />
+              {form.video && (
+                <video src={form.video} controls style={{width:"100%",maxHeight:220,borderRadius:12,marginTop:10,border:`1px solid ${C.border}`}} />
+              )}
+            </div>
+          )}
 
           <div style={{marginBottom:14}}>
             <label style={lbl}>ملاحظات</label>
@@ -226,6 +237,7 @@ export default function PlanPage() {
                     {item.occasion && <span>· {item.occasion}</span>}
                     {item.scheduledDate && <span>· 📅 {item.scheduledDate}</span>}
                     {item.image && <span>· 🖼️ صورة</span>}
+                    {item.video && <span>· 🎬 فيديو</span>}
                   </div>
                 </div>
                 <div style={{display:"flex", gap:8, flexShrink:0}}>

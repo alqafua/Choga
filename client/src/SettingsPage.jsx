@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { C, card, lbl, subHead, fieldStyle, chipStyle, primaryBtn, dangerBtn, OCCASIONS } from "./theme";
-import { getSettings, saveSettings, getMetaStatus, connectMetaToken, disconnectMeta, getTikTokStatus, disconnectTikTok } from "./api";
+import { getSettings, saveSettings, getMetaStatus, connectMetaToken, disconnectMeta, getTikTokStatus, disconnectTikTok, getYouTubeStatus, disconnectYouTube } from "./api";
 
 const TONES     = ["راقٍ وودّي","احترافي","حماسي","عاطفي","بسيط وصريح"];
 const TRAITS    = ["فاخر","حرفي","دافئ","مناسباتي","ودّي","مبدع","موثوق","أنيق"];
@@ -10,13 +10,16 @@ const PLATFORMS = [
   { id:"facebook",  name:"فيسبوك",    color:"#4A90D9", icon:"📘", prefix:"",     note:null },
   { id:"snapchat",  name:"سناب شات", color:"#F5D020", icon:"👻", prefix:"@",    note:"النشر يدوي فقط — لا يوجد API رسمي" },
   { id:"tiktok",    name:"تيك توك",   color:"#69C9D0", icon:"🎵", prefix:"@",    note:"يحتاج موافقة من المنصّة" },
+  { id:"youtube",   name:"يوتيوب",   color:"#FF0000", icon:"▶️", prefix:"@",    note:null },
   { id:"whatsapp",  name:"واتساب",    color:"#25D366", icon:"💬", prefix:"+967", note:null },
 ];
 
 const API_FIELDS = [
-  { id:"anthropic",        name:"Anthropic Claude",     desc:"الذكاء الاصطناعي — صناعة المحتوى",      where:"console.anthropic.com  ←  API Keys",       ph:"sk-ant-api03-..." },
-  { id:"tiktokClientKey",    name:"TikTok — Client Key",    desc:"النشر على تيك توك (المعرّف)",  where:"developers.tiktok.com  ←  Apps  ←  Keys", ph:"aw_xxxxxxxxxxxxxxxxxxxx" },
-  { id:"tiktokClientSecret", name:"TikTok — Client Secret", desc:"النشر على تيك توك (الرمز السري)", where:"developers.tiktok.com  ←  Apps  ←  Keys", ph:"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" },
+  { id:"anthropic",          name:"Anthropic Claude",        desc:"الذكاء الاصطناعي — صناعة المحتوى",        where:"console.anthropic.com  ←  API Keys",       ph:"sk-ant-api03-..." },
+  { id:"tiktokClientKey",    name:"TikTok — Client Key",     desc:"النشر على تيك توك (المعرّف)",            where:"developers.tiktok.com  ←  Apps  ←  Keys", ph:"aw_xxxxxxxxxxxxxxxxxxxx" },
+  { id:"tiktokClientSecret", name:"TikTok — Client Secret",  desc:"النشر على تيك توك (الرمز السري)",        where:"developers.tiktok.com  ←  Apps  ←  Keys", ph:"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" },
+  { id:"youtubeClientId",     name:"YouTube — Client ID",     desc:"النشر على يوتيوب شورتس (المعرّف)",       where:"console.cloud.google.com  ←  Credentials", ph:"xxxxxxxxxxxx.apps.googleusercontent.com" },
+  { id:"youtubeClientSecret", name:"YouTube — Client Secret", desc:"النشر على يوتيوب شورتس (الرمز السري)",   where:"console.cloud.google.com  ←  Credentials", ph:"GOCSPX-xxxxxxxxxxxxxxxxxxxxxxxx" },
 ];
 
 const TIKTOK_GUIDE_STEPS = [
@@ -26,6 +29,15 @@ const TIKTOK_GUIDE_STEPS = [
   "انسخ Client Key و Client Secret من صفحة التطبيق وألصقهما في الحقلين أعلاه ثم احفظ الإعدادات",
   "من حقل \"Redirect URI\" في إعدادات التطبيق، أضف الرابط الموضّح في تبويب «الحسابات» تحت بطاقة «ربط تيك توك»",
   "رجوعاً لتبويب «الحسابات» — اضغط «ربط تيك توك» لإكمال الربط عبر تسجيل الدخول",
+];
+
+const YOUTUBE_GUIDE_STEPS = [
+  "افتح الرابط أدناه وسجّل دخول بحساب Google الخاص بالمحل، وأنشئ مشروع جديد إن لم يوجد",
+  "من القائمة الجانبية: \"APIs & Services\" ← \"Library\" — فعّل \"YouTube Data API v3\"",
+  "من \"APIs & Services\" ← \"Credentials\" ← \"Create Credentials\" ← \"OAuth client ID\" (نوع التطبيق: Web application)",
+  "في \"Authorized redirect URIs\" أضف الرابط الموضّح في تبويب «الحسابات» تحت بطاقة «ربط يوتيوب»",
+  "انسخ Client ID و Client Secret وألصقهما في الحقلين أعلاه ثم احفظ الإعدادات",
+  "رجوعاً لتبويب «الحسابات» — اضغط «ربط يوتيوب» لإكمال الربط عبر تسجيل الدخول",
 ];
 
 const API_GUIDES = {
@@ -41,6 +53,8 @@ const API_GUIDES = {
   },
   tiktokClientKey:    { url: "https://developers.tiktok.com/apps", steps: TIKTOK_GUIDE_STEPS },
   tiktokClientSecret: { url: "https://developers.tiktok.com/apps", steps: TIKTOK_GUIDE_STEPS },
+  youtubeClientId:     { url: "https://console.cloud.google.com/apis/credentials", steps: YOUTUBE_GUIDE_STEPS },
+  youtubeClientSecret: { url: "https://console.cloud.google.com/apis/credentials", steps: YOUTUBE_GUIDE_STEPS },
 };
 
 const DEF = {
@@ -54,8 +68,8 @@ const DEF = {
   products:"شوكولاتة يدوية فاخرة، تغليف مميز للمناسبات، هدايا الأعراس والعيد والتخرج",
   occasions:["أعراس","عيد الفطر","عيد الأضحى","رمضان"],
   priceRange:"", extra:"",
-  platforms:{ instagram:"choga.yo", facebook:"CHOGA", snapchat:"", tiktok:"", whatsapp:"" },
-  api:{ anthropic:"", tiktokClientKey:"", tiktokClientSecret:"" },
+  platforms:{ instagram:"choga.yo", facebook:"CHOGA", snapchat:"", tiktok:"", youtube:"", whatsapp:"" },
+  api:{ anthropic:"", tiktokClientKey:"", tiktokClientSecret:"", youtubeClientId:"", youtubeClientSecret:"" },
 };
 
 export default function SettingsPage() {
@@ -81,6 +95,14 @@ export default function SettingsPage() {
     return "";
   });
 
+  const [youtube,    setYoutube]    = useState(null);
+  const [youtubeMsg] = useState(() => {
+    const result = new URLSearchParams(window.location.search).get("youtube");
+    if (result === "connected") return "تم ربط يوتيوب بنجاح ✅";
+    if (result === "error") return "تعذّر الربط — حاول مجدداً";
+    return "";
+  });
+
   useEffect(()=>{
     (async()=>{
       try {
@@ -94,9 +116,10 @@ export default function SettingsPage() {
 
   useEffect(()=>{
     const params = new URLSearchParams(window.location.search);
-    if (params.has("meta") || params.has("tiktok")) {
+    if (params.has("meta") || params.has("tiktok") || params.has("youtube")) {
       params.delete("meta");
       params.delete("tiktok");
+      params.delete("youtube");
       const qs = params.toString();
       window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : ""));
     }
@@ -112,6 +135,13 @@ export default function SettingsPage() {
         setTiktok(await getTikTokStatus());
       } catch {
         setTiktok({ configured:false, connected:false });
+      }
+    })();
+    (async()=>{
+      try {
+        setYoutube(await getYouTubeStatus());
+      } catch {
+        setYoutube({ configured:false, connected:false });
       }
     })();
   },[]);
@@ -130,6 +160,12 @@ export default function SettingsPage() {
     if (!window.confirm("هل تريد إلغاء ربط تيك توك؟")) return;
     await disconnectTikTok();
     setTiktok(await getTikTokStatus());
+  };
+
+  const handleYouTubeDisconnect = async () => {
+    if (!window.confirm("هل تريد إلغاء ربط يوتيوب؟")) return;
+    await disconnectYouTube();
+    setYoutube(await getYouTubeStatus());
   };
 
   const handleMetaTokenConnect = async () => {
@@ -361,6 +397,39 @@ export default function SettingsPage() {
                 </div>
                 {tiktok?.configured ? (
                   <a href="/api/tiktok/connect" style={{...primaryBtn, display:"inline-block", textDecoration:"none", textAlign:"center"}}>ربط تيك توك</a>
+                ) : (
+                  <div style={{fontSize:12,color:C.muted,lineHeight:1.7}}>أكمل وحفظ مفتاحي API أعلاه أولاً لتفعيل الربط</div>
+                )}
+              </>
+            )}
+          </div>
+
+          <div style={card}>
+            <div style={subHead}>ربط يوتيوب</div>
+            {youtubeMsg && (
+              <div style={{fontSize:12, color: youtubeMsg.includes("نجاح") ? C.green : C.red, marginBottom:10, lineHeight:1.7}}>{youtubeMsg}</div>
+            )}
+            {youtube?.connected ? (
+              <>
+                <div style={{fontSize:13,marginBottom:12,lineHeight:1.8}}>
+                  <span style={{color:C.green,fontWeight:700}}>متصل ✓</span>
+                  {youtube.channelTitle && <> — <strong>{youtube.channelTitle}</strong></>}
+                </div>
+                <div style={{marginBottom:12,display:"flex",gap:8,fontSize:11,color:"#D4A020",background:"rgba(212,160,32,0.08)",border:"1px solid rgba(212,160,32,0.2)",borderRadius:10,padding:"8px 12px",lineHeight:1.6}}>
+                  <span style={{flexShrink:0}}>⚠️</span><span>النشر يحتاج رابط فيديو (mp4) لكل منشور — أضفه من تبويب التخطيط لتفعيل النشر التلقائي على يوتيوب شورتس.</span>
+                </div>
+                <button type="button" onClick={handleYouTubeDisconnect} style={dangerBtn}>إلغاء الربط</button>
+              </>
+            ) : (
+              <>
+                <p style={{fontSize:12,color:C.muted,marginBottom:12,lineHeight:1.7}}>
+                  أضف Client ID و Client Secret من تبويب <strong>مفاتيح API</strong> واحفظهما، ثم سجّل رابط إعادة التوجيه التالي في إعدادات تطبيق Google (Authorized redirect URI):
+                </p>
+                <div style={{fontSize:11,color:C.dim,fontFamily:"monospace",direction:"ltr",textAlign:"right",background:C.inp,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",marginBottom:12,wordBreak:"break-all"}}>
+                  {`${window.location.origin}/api/youtube/callback`}
+                </div>
+                {youtube?.configured ? (
+                  <a href="/api/youtube/connect" style={{...primaryBtn, display:"inline-block", textDecoration:"none", textAlign:"center"}}>ربط يوتيوب</a>
                 ) : (
                   <div style={{fontSize:12,color:C.muted,lineHeight:1.7}}>أكمل وحفظ مفتاحي API أعلاه أولاً لتفعيل الربط</div>
                 )}

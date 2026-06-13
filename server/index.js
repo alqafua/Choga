@@ -67,6 +67,22 @@ function writeTikTokConnection(data) {
   fs.writeFileSync(TIKTOK_FILE, JSON.stringify(data, null, 2));
 }
 
+// ── YouTube connection (Data API v3 — Shorts upload) ────────────
+const YOUTUBE_FILE = path.join(DATA_DIR, "youtube-connection.json");
+const YOUTUBE_SCOPES = "https://www.googleapis.com/auth/youtube.upload";
+
+function readYouTubeConnection() {
+  try {
+    return JSON.parse(fs.readFileSync(YOUTUBE_FILE, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
+function writeYouTubeConnection(data) {
+  fs.writeFileSync(YOUTUBE_FILE, JSON.stringify(data, null, 2));
+}
+
 // Publish a content item to its target platform via the Meta Graph API.
 // Returns { ok: true, postId } on success or { ok: false, error } otherwise.
 async function publishToMeta(item) {
@@ -192,9 +208,104 @@ async function publishToTikTok(item) {
   }
 }
 
+// Returns a valid YouTube access token, refreshing it via the stored
+// refresh token if the access token has expired.
+async function getYouTubeAccessToken() {
+  const conn = readYouTubeConnection();
+  if (!conn?.accessToken) return null;
+  if (conn.expiresAt && Date.now() < conn.expiresAt - 60_000) return conn.accessToken;
+  if (!conn.refreshToken) return conn.accessToken;
+
+  const settings = readSettings();
+  const clientId = settings?.api?.youtubeClientId;
+  const clientSecret = settings?.api?.youtubeClientSecret;
+  if (!clientId || !clientSecret) return conn.accessToken;
+
+  try {
+    const r = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: "refresh_token",
+        refresh_token: conn.refreshToken,
+      }),
+    });
+    const data = await r.json();
+    if (!data.access_token) return conn.accessToken;
+    writeYouTubeConnection({
+      ...conn,
+      accessToken: data.access_token,
+      expiresAt: Date.now() + (data.expires_in || 0) * 1000,
+    });
+    return data.access_token;
+  } catch {
+    return conn.accessToken;
+  }
+}
+
+// Upload a video to YouTube (as a Short, if vertical & under 60s) via the
+// resumable upload endpoint. The video bytes are fetched from item.video
+// and sent to Google in a single PUT request.
+async function publishToYouTube(item) {
+  const accessToken = await getYouTubeAccessToken();
+  if (!accessToken) return { ok: false, error: "youtube_not_connected" };
+  if (!item.video) return { ok: false, error: "video_required" };
+
+  try {
+    const videoRes = await fetch(item.video);
+    if (!videoRes.ok) return { ok: false, error: "video_fetch_failed" };
+    const contentType = videoRes.headers.get("content-type") || "video/mp4";
+    const videoBuffer = Buffer.from(await videoRes.arrayBuffer());
+
+    const initRes = await fetch("https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        "X-Upload-Content-Type": contentType,
+        "X-Upload-Content-Length": String(videoBuffer.length),
+      },
+      body: JSON.stringify({
+        snippet: {
+          title: (item.title || item.caption || "Choga").slice(0, 100),
+          description: item.caption || "",
+        },
+        status: {
+          privacyStatus: "public",
+          selfDeclaredMadeForKids: false,
+        },
+      }),
+    });
+    if (!initRes.ok) {
+      const errData = await initRes.json().catch(() => null);
+      return { ok: false, error: errData?.error?.message || "youtube init failed" };
+    }
+    const uploadUrl = initRes.headers.get("location");
+    if (!uploadUrl) return { ok: false, error: "youtube init failed" };
+
+    const uploadRes = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": contentType,
+        "Content-Length": String(videoBuffer.length),
+      },
+      body: videoBuffer,
+    });
+    const uploadData = await uploadRes.json();
+    if (uploadData.error) return { ok: false, error: uploadData.error.message };
+    return { ok: true, postId: uploadData.id || null };
+  } catch (err) {
+    console.error("youtube publish error:", err);
+    return { ok: false, error: "youtube publish failed" };
+  }
+}
+
 // Dispatch a content item to the right platform publisher.
 async function publishContentItem(item) {
   if (item.platform === "tiktok") return publishToTikTok(item);
+  if (item.platform === "youtube") return publishToYouTube(item);
   return publishToMeta(item);
 }
 
@@ -895,6 +1006,93 @@ app.post("/api/tiktok/disconnect", requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── YouTube connection (Data API v3) ─────────────────────────────
+// Uses the Client ID/Secret pasted into Settings ← مفاتيح API, so the
+// whole setup is self-serve (no server env vars / redeploy needed).
+app.get("/api/youtube/status", requireAuth, (req, res) => {
+  const conn = readYouTubeConnection();
+  const settings = readSettings();
+  res.json({
+    configured: !!(settings?.api?.youtubeClientId && settings?.api?.youtubeClientSecret),
+    connected: !!conn,
+    channelTitle: conn?.channelTitle || null,
+    connectedAt: conn?.connectedAt || null,
+  });
+});
+
+app.get("/api/youtube/connect", requireAuth, (req, res) => {
+  const settings = readSettings();
+  const clientId = settings?.api?.youtubeClientId;
+  if (!clientId) return res.status(400).send("أضف Client ID و Client Secret من الإعدادات ← مفاتيح API أولاً");
+
+  const redirectUri = `${req.protocol}://${req.get("host")}/api/youtube/callback`;
+  const state = jwt.sign({ purpose: "youtube-connect" }, JWT_SECRET, { expiresIn: "10m" });
+  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&access_type=offline&prompt=consent&scope=${encodeURIComponent(YOUTUBE_SCOPES)}&state=${encodeURIComponent(state)}`;
+  res.redirect(url);
+});
+
+app.get("/api/youtube/callback", async (req, res) => {
+  const { code, state, error } = req.query;
+  try {
+    jwt.verify(String(state), JWT_SECRET);
+  } catch {
+    return res.redirect("/?youtube=error");
+  }
+  if (error || !code) return res.redirect("/?youtube=error");
+
+  const settings = readSettings();
+  const clientId = settings?.api?.youtubeClientId;
+  const clientSecret = settings?.api?.youtubeClientSecret;
+  if (!clientId || !clientSecret) return res.redirect("/?youtube=error");
+
+  const redirectUri = `${req.protocol}://${req.get("host")}/api/youtube/callback`;
+  try {
+    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code: String(code),
+        grant_type: "authorization_code",
+        redirect_uri: redirectUri,
+      }),
+    });
+    const tokenData = await tokenRes.json();
+    if (!tokenData.access_token) throw new Error("token exchange failed");
+
+    let channelTitle = null;
+    try {
+      const chRes = await fetch("https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true", {
+        headers: { Authorization: `Bearer ${tokenData.access_token}` },
+      });
+      const chData = await chRes.json();
+      channelTitle = chData.items?.[0]?.snippet?.title || null;
+    } catch {
+      // best-effort
+    }
+
+    const existing = readYouTubeConnection();
+    writeYouTubeConnection({
+      channelTitle,
+      accessToken: tokenData.access_token,
+      refreshToken: tokenData.refresh_token || existing?.refreshToken || null,
+      expiresAt: Date.now() + (tokenData.expires_in || 0) * 1000,
+      connectedAt: new Date().toISOString(),
+    });
+
+    res.redirect("/?youtube=connected");
+  } catch (err) {
+    console.error("youtube oauth error:", err);
+    res.redirect("/?youtube=error");
+  }
+});
+
+app.post("/api/youtube/disconnect", requireAuth, (req, res) => {
+  if (fs.existsSync(YOUTUBE_FILE)) fs.unlinkSync(YOUTUBE_FILE);
+  res.json({ ok: true });
+});
+
 // ── product catalog sync (Facebook Commerce Manager → Instagram Shop) ──
 // Discover product catalogs the connected account manages, so local
 // catalog items can be pushed into the same catalog feeding Instagram Shop.
@@ -1068,7 +1266,7 @@ async function runAutoPublish() {
     const today = new Date().toISOString().slice(0, 10);
     const due = content.list().filter((i) =>
       i.status === "ready" &&
-      ["instagram", "facebook", "tiktok"].includes(i.platform) &&
+      ["instagram", "facebook", "tiktok", "youtube"].includes(i.platform) &&
       (!i.scheduledDate || i.scheduledDate <= today)
     );
     for (const item of due) {

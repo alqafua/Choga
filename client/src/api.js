@@ -70,6 +70,10 @@ export const disconnectMeta = () => request("/api/meta/disconnect", { method: "P
 export const getTikTokStatus = () => request("/api/tiktok/status").then((r) => r.json());
 export const disconnectTikTok = () => request("/api/tiktok/disconnect", { method: "POST" }).then((r) => r.json());
 
+// ── YouTube connection (Data API v3) ──────────────────────────────
+export const getYouTubeStatus = () => request("/api/youtube/status").then((r) => r.json());
+export const disconnectYouTube = () => request("/api/youtube/disconnect", { method: "POST" }).then((r) => r.json());
+
 // ── Instagram DM inbox ───────────────────────────────────────────
 export const getConversations = () => request("/api/meta/conversations").then((r) => r.json());
 export const getConversationMessages = (id) =>

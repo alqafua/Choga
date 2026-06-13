@@ -111,6 +111,7 @@ export const PLATFORMS = [
   { id:"facebook",  name:"فيسبوك",    color:"#4A90D9", icon:"📘" },
   { id:"snapchat",  name:"سناب شات", color:"#F5D020", icon:"👻" },
   { id:"tiktok",    name:"تيك توك",   color:"#69C9D0", icon:"🎵" },
+  { id:"youtube",   name:"يوتيوب",   color:"#FF0000", icon:"▶️" },
   { id:"whatsapp",  name:"واتساب",    color:"#25D366", icon:"💬" },
 ];
 

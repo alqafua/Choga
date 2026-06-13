@@ -12,6 +12,7 @@ export default function CreatorPage() {
   const [title, setTitle] = useState("");
   const [caption, setCaption] = useState("");
   const [image, setImage] = useState("");
+  const [video, setVideo] = useState("");
   const [scheduledDate, setScheduledDate] = useState("");
   const [focus, setFocus] = useState("");
   const [generating, setGenerating] = useState(false);
@@ -58,12 +59,13 @@ export default function CreatorPage() {
     try {
       await createContent({
         title: title.trim() || caption.slice(0, 40),
-        platform, occasion, type, scheduledDate, caption, image, notes, status,
+        platform, occasion, type, scheduledDate, caption, image, video, notes, status,
       });
       setSaveMsg(status === "review" ? "تم الحفظ وإرساله للمراجعة ✅" : "تم الحفظ كمسودة ✅");
       setCaption("");
       setTitle("");
       setImage("");
+      setVideo("");
       setNotes("");
     } catch {
       setSaveMsg("تعذّر الحفظ — حاول مجدداً");
@@ -128,12 +130,21 @@ export default function CreatorPage() {
           <textarea style={{...iStyle("caption"),resize:"none",height:160,lineHeight:1.7}} value={caption} onFocus={()=>setFocus("caption")} onBlur={()=>setFocus("")} onChange={e=>setCaption(e.target.value)} placeholder="سيظهر النص المولّد هنا — يمكنك تعديله قبل الحفظ" />
         </div>
         <div style={{marginBottom:14}}>
-          <label style={lbl}>رابط الصورة (مطلوب للنشر التلقائي على إنستغرام)</label>
+          <label style={lbl}>رابط الصورة (مطلوب للنشر التلقائي على إنستغرام/تيك توك)</label>
           <input style={{...iStyle("image"),direction:"ltr",textAlign:"right",fontFamily:"monospace",fontSize:12}} value={image} onFocus={()=>setFocus("image")} onBlur={()=>setFocus("")} onChange={e=>setImage(e.target.value)} placeholder="https://...الصق رابط الصورة" />
           {image && (
             <img src={image} alt="" style={{width:"100%",maxHeight:140,objectFit:"cover",borderRadius:12,marginTop:10,border:`1px solid ${C.border}`}} onError={(e)=>{e.target.style.display="none";}} onLoad={(e)=>{e.target.style.display="block";}} />
           )}
         </div>
+        {platform === "youtube" && (
+          <div style={{marginBottom:14}}>
+            <label style={lbl}>رابط الفيديو (mp4 — مطلوب للنشر التلقائي على يوتيوب شورتس)</label>
+            <input style={{...iStyle("video"),direction:"ltr",textAlign:"right",fontFamily:"monospace",fontSize:12}} value={video} onFocus={()=>setFocus("video")} onBlur={()=>setFocus("")} onChange={e=>setVideo(e.target.value)} placeholder="https://...الصق رابط الفيديو" />
+            {video && (
+              <video src={video} controls style={{width:"100%",maxHeight:220,borderRadius:12,marginTop:10,border:`1px solid ${C.border}`}} />
+            )}
+          </div>
+        )}
         <div style={{marginBottom:14}}>
           <label style={lbl}>تاريخ النشر المخطط (اختياري)</label>
           <input type="date" style={iStyle("scheduledDate")} value={scheduledDate} onFocus={()=>setFocus("scheduledDate")} onBlur={()=>setFocus("")} onChange={e=>setScheduledDate(e.target.value)} />

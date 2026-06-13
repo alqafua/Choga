@@ -1,13 +1,16 @@
 import { useState, useEffect } from "react";
 import { C, card, subHead, statusChipStyle, primaryBtn, platformInfo } from "./theme";
-import { listContent, updateContent, publishContent, getSettings, saveSettings, getMetaStatus, getTikTokStatus } from "./api";
+import { listContent, updateContent, publishContent, getSettings, saveSettings, getMetaStatus, getTikTokStatus, getYouTubeStatus } from "./api";
 
 const ERROR_LABELS = {
   meta_not_connected: "يجب ربط حساب ميتا من الإعدادات أولاً",
   facebook_not_connected: "لا يوجد صفحة فيسبوك مرتبطة بحساب ميتا",
   instagram_not_connected: "لا يوجد حساب إنستغرام مرتبط بحساب ميتا",
   tiktok_not_connected: "يجب ربط حساب تيك توك من الإعدادات أولاً",
+  youtube_not_connected: "يجب ربط حساب يوتيوب من الإعدادات أولاً",
   image_required: "أضف صورة لهذا المنشور من تبويب التخطيط لتفعيل النشر التلقائي",
+  video_required: "أضف رابط فيديو لهذا المنشور من تبويب التخطيط لتفعيل النشر التلقائي",
+  video_fetch_failed: "تعذّر تحميل الفيديو من الرابط المضاف — تأكد من صحته",
   unsupported_platform: "هذه المنصة لا تدعم النشر التلقائي بعد",
 };
 const errorLabel = (code) => ERROR_LABELS[code] || code || "تعذّر النشر — حاول مجدداً";
@@ -17,6 +20,7 @@ export default function PublishPage() {
   const [settings, setSettings] = useState(null);
   const [meta,     setMeta]     = useState(null);
   const [tiktok,   setTiktok]   = useState(null);
+  const [youtube,  setYoutube]  = useState(null);
   const [loading,  setLoading]  = useState(true);
   const [busyId,   setBusyId]   = useState(null);
   const [errors,   setErrors]   = useState({});
@@ -25,11 +29,12 @@ export default function PublishPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const [c, s, m, t] = await Promise.all([listContent(), getSettings(), getMetaStatus(), getTikTokStatus()]);
+      const [c, s, m, t, y] = await Promise.all([listContent(), getSettings(), getMetaStatus(), getTikTokStatus(), getYouTubeStatus()]);
       setItems(c);
       setSettings(s || {});
       setMeta(m);
       setTiktok(t);
+      setYoutube(y);
     } catch {
       setItems([]);
     }
@@ -96,8 +101,8 @@ export default function PublishPage() {
         </div>
         <p style={{fontSize:12, color:C.muted, lineHeight:1.7}}>
           {publishMode === "auto"
-            ? "سيُنشر المحتوى «جاهز للنشر» على إنستغرام وفيسبوك تلقائياً عند حلول تاريخه المخطط (يحتاج صورة للمنشورات على إنستغرام). باقي المنصات تبقى يدوية."
-            : "النشر على إنستغرام وفيسبوك يتم بضغطة «نشر الآن 🚀» — وباقي المنصات تبقى يدوية بالكامل."}
+            ? "سيُنشر المحتوى «جاهز للنشر» على إنستغرام وفيسبوك وتيك توك ويوتيوب تلقائياً عند حلول تاريخه المخطط (يحتاج صورة للمنشورات على إنستغرام/تيك توك، ورابط فيديو للمنشورات على يوتيوب). باقي المنصات تبقى يدوية."
+            : "النشر على إنستغرام وفيسبوك وتيك توك ويوتيوب يتم بضغطة «نشر الآن 🚀» — وباقي المنصات تبقى يدوية بالكامل."}
         </p>
       </div>
 
@@ -114,9 +119,12 @@ export default function PublishPage() {
           const igOk = !!(meta?.connected && meta.igUsername);
           const fbOk = !!(meta?.connected && meta.fbPageName);
           const ttOk = !!tiktok?.connected;
-          const apiSupported = (item.platform === "instagram" && igOk) || (item.platform === "facebook" && fbOk) || (item.platform === "tiktok" && ttOk);
+          const ytOk = !!youtube?.connected;
+          const apiSupported = (item.platform === "instagram" && igOk) || (item.platform === "facebook" && fbOk) || (item.platform === "tiktok" && ttOk) || (item.platform === "youtube" && ytOk);
           const needsImage = (item.platform === "instagram" || item.platform === "tiktok") && !item.image;
-          const canPublishNow = apiSupported && !needsImage;
+          const needsVideo = item.platform === "youtube" && !item.video;
+          const needsMedia = needsImage || needsVideo;
+          const canPublishNow = apiSupported && !needsMedia;
           const busy = busyId === item.id;
 
           return (
@@ -135,11 +143,15 @@ export default function PublishPage() {
                 <img src={item.image} alt="" style={{width:"100%",maxHeight:160,objectFit:"cover",borderRadius:12,marginBottom:10,border:`1px solid ${C.border}`}} onError={(e)=>{e.target.style.display="none";}} />
               )}
 
+              {item.video && (
+                <video src={item.video} controls style={{width:"100%",maxHeight:200,borderRadius:12,marginBottom:10,border:`1px solid ${C.border}`}} />
+              )}
+
               {item.caption && <div style={{fontSize:13, color:C.text, lineHeight:1.6, marginBottom:12, whiteSpace:"pre-wrap"}}>{item.caption}</div>}
 
-              {apiSupported && needsImage && (
+              {apiSupported && needsMedia && (
                 <div style={{marginBottom:10,display:"flex",gap:8,fontSize:11,color:"#D4A020",background:"rgba(212,160,32,0.08)",border:"1px solid rgba(212,160,32,0.2)",borderRadius:10,padding:"8px 12px",lineHeight:1.6}}>
-                  <span style={{flexShrink:0}}>⚠️</span><span>أضف صورة لهذا المنشور من تبويب التخطيط لتفعيل النشر التلقائي</span>
+                  <span style={{flexShrink:0}}>⚠️</span><span>{needsVideo ? "أضف رابط فيديو لهذا المنشور من تبويب التخطيط لتفعيل النشر التلقائي" : "أضف صورة لهذا المنشور من تبويب التخطيط لتفعيل النشر التلقائي"}</span>
                 </div>
               )}
 
