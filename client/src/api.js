@@ -66,6 +66,13 @@ export const connectMetaToken = (token) =>
   request("/api/meta/token", { method: "POST", body: JSON.stringify({ token }) }).then((r) => r.json());
 export const disconnectMeta = () => request("/api/meta/disconnect", { method: "POST" }).then((r) => r.json());
 
+// ── Instagram DM inbox ───────────────────────────────────────────
+export const getConversations = () => request("/api/meta/conversations").then((r) => r.json());
+export const getConversationMessages = (id) =>
+  request(`/api/meta/conversations/${id}/messages`).then((r) => r.json());
+export const sendConversationReply = (id, message, recipientId) =>
+  request(`/api/meta/conversations/${id}/reply`, { method: "POST", body: JSON.stringify({ message, recipientId }) }).then((r) => r.json());
+
 // ── product catalog sync (Facebook Commerce Manager / Instagram Shop) ──
 export const getMetaCatalog = () => request("/api/meta/catalog").then((r) => r.json());
 export const selectMetaCatalog = (catalogId) =>

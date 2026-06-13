@@ -496,6 +496,95 @@ app.get("/api/meta/insights", requireAuth, async (req, res) => {
   res.json({ connected: true, instagram, facebook });
 });
 
+// ── Instagram DM inbox ──────────────────────────────────────────
+// Reads recent message threads and sends replies via the Messaging API.
+// Requires the instagram_business_manage_messages permission on the token.
+app.get("/api/meta/conversations", requireAuth, async (req, res) => {
+  const conn = readMetaConnection();
+  if (!conn?.accessToken || !conn?.igUserId) return res.json({ connected: false });
+
+  const base = conn.pageId ? "https://graph.facebook.com/v21.0" : `${IG_GRAPH}/v21.0`;
+  const ownerId = conn.pageId || conn.igUserId;
+  const platformParam = conn.pageId ? "&platform=instagram" : "";
+
+  try {
+    const r = await fetch(
+      `${base}/${ownerId}/conversations?fields=participants,updated_time,messages.limit(1){message,from,created_time}${platformParam}&access_token=${conn.accessToken}`
+    );
+    const data = await r.json();
+    if (data.error) {
+      return res.json({ connected: true, needsPermission: true, error: data.error.message });
+    }
+    const conversations = (data.data || []).map((c) => {
+      const participants = c.participants?.data || [];
+      const other = participants.find((p) => p.id !== conn.igUserId) || null;
+      const last = c.messages?.data?.[0] || null;
+      return {
+        id: c.id,
+        participant: other,
+        updatedTime: c.updated_time,
+        lastMessage: last ? { text: last.message || "", fromId: last.from?.id || null, time: last.created_time } : null,
+      };
+    });
+    res.json({ connected: true, conversations });
+  } catch (err) {
+    console.error("conversations error:", err);
+    res.status(500).json({ connected: true, error: "failed to load conversations" });
+  }
+});
+
+app.get("/api/meta/conversations/:id/messages", requireAuth, async (req, res) => {
+  const conn = readMetaConnection();
+  if (!conn?.accessToken) return res.status(400).json({ ok: false, error: "not connected" });
+  const base = conn.pageId ? "https://graph.facebook.com/v21.0" : `${IG_GRAPH}/v21.0`;
+
+  try {
+    const r = await fetch(
+      `${base}/${req.params.id}/messages?fields=id,message,from,created_time&access_token=${conn.accessToken}`
+    );
+    const data = await r.json();
+    if (data.error) return res.status(400).json({ ok: false, error: data.error.message });
+    const messages = (data.data || [])
+      .map((m) => ({
+        id: m.id,
+        text: m.message || "",
+        mine: m.from?.id === conn.igUserId,
+        time: m.created_time,
+      }))
+      .reverse();
+    res.json({ ok: true, messages });
+  } catch (err) {
+    console.error("conversation messages error:", err);
+    res.status(500).json({ ok: false, error: "failed to load messages" });
+  }
+});
+
+app.post("/api/meta/conversations/:id/reply", requireAuth, async (req, res) => {
+  const conn = readMetaConnection();
+  if (!conn?.accessToken || !conn?.igUserId) return res.status(400).json({ ok: false, error: "not connected" });
+
+  const { message, recipientId } = req.body || {};
+  if (!message?.trim() || !recipientId) return res.status(400).json({ ok: false, error: "missing fields" });
+
+  const base = conn.pageId ? "https://graph.facebook.com/v21.0" : `${IG_GRAPH}/v21.0`;
+  const ownerId = conn.pageId || conn.igUserId;
+
+  try {
+    const body = new URLSearchParams({
+      recipient: JSON.stringify({ id: recipientId }),
+      message: JSON.stringify({ text: message }),
+      access_token: conn.accessToken,
+    });
+    const r = await fetch(`${base}/${ownerId}/messages`, { method: "POST", body });
+    const data = await r.json();
+    if (data.error) return res.status(400).json({ ok: false, error: data.error.message });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("send reply error:", err);
+    res.status(500).json({ ok: false, error: "send failed" });
+  }
+});
+
 app.get("/api/meta/connect", requireAuth, (req, res) => {
   if (!INSTAGRAM_APP_ID) return res.status(500).send("INSTAGRAM_APP_ID is not configured");
   const redirectUri = `${req.protocol}://${req.get("host")}/api/meta/callback`;

@@ -1,8 +1,17 @@
 import { useState, useEffect } from "react";
 import { C, card, lbl, subHead, fieldStyle, statusChipStyle, primaryBtn, ghostBtn, dangerBtn, REPLY_CATEGORIES } from "./theme";
-import { listReplies, createReply, updateReply, deleteReply, draftReply } from "./api";
+import { listReplies, createReply, updateReply, deleteReply, draftReply, getConversations, getConversationMessages, sendConversationReply } from "./api";
 
 const emptyForm = () => ({ category: "عام", label: "", text: "" });
+
+const fmtTime = (iso) => {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleString("ar", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+};
 
 export default function InboxPage() {
   const [items,      setItems]      = useState([]);
@@ -22,13 +31,94 @@ export default function InboxPage() {
   const [draftError, setDraftError] = useState("");
   const [draftCopied,setDraftCopied]= useState(false);
 
+  // Instagram DM conversations
+  const [convos,      setConvos]      = useState([]);
+  const [convoState,  setConvoState]  = useState("loading"); // loading | ok | not_connected | needs_permission | error
+  const [convoError,  setConvoError]  = useState("");
+  const [openId,      setOpenId]      = useState(null);
+  const [thread,      setThread]      = useState([]);
+  const [threadLoading, setThreadLoading] = useState(false);
+  const [reply,       setReply]       = useState("");
+  const [sending,     setSending]     = useState(false);
+  const [sendError,   setSendError]   = useState("");
+  const [aiThreadBusy, setAiThreadBusy] = useState(false);
+
   const load = async () => {
     setLoading(true);
     try { setItems(await listReplies()); } catch { setItems([]); }
     setLoading(false);
   };
 
+  const loadConvos = async () => {
+    setConvoState("loading");
+    setConvoError("");
+    try {
+      const res = await getConversations();
+      if (!res.connected) {
+        setConvoState("not_connected");
+      } else if (res.needsPermission) {
+        setConvoState("needs_permission");
+        setConvoError(res.error || "");
+      } else if (res.error) {
+        setConvoState("error");
+        setConvoError(res.error);
+      } else {
+        setConvos(res.conversations || []);
+        setConvoState("ok");
+      }
+    } catch {
+      setConvoState("error");
+    }
+  };
+
   useEffect(() => { (async () => { await load(); })(); }, []);
+  useEffect(() => { (async () => { await loadConvos(); })(); }, []);
+
+  const toggleConvo = async (c) => {
+    if (openId === c.id) { setOpenId(null); return; }
+    setOpenId(c.id);
+    setThread([]);
+    setReply("");
+    setSendError("");
+    setThreadLoading(true);
+    try {
+      const res = await getConversationMessages(c.id);
+      setThread(res.ok ? res.messages : []);
+    } catch {
+      setThread([]);
+    }
+    setThreadLoading(false);
+  };
+
+  const sendThreadReply = async (c) => {
+    if (!reply.trim()) return;
+    setSending(true);
+    setSendError("");
+    try {
+      const res = await sendConversationReply(c.id, reply.trim(), c.participant?.id);
+      if (res.ok) {
+        setReply("");
+        const msgs = await getConversationMessages(c.id);
+        setThread(msgs.ok ? msgs.messages : []);
+      } else {
+        setSendError(res.error || "تعذّر الإرسال");
+      }
+    } catch {
+      setSendError("تعذّر الإرسال — حاول مجدداً");
+    }
+    setSending(false);
+  };
+
+  const aiDraftForThread = async () => {
+    const lastIncoming = [...thread].reverse().find(m => !m.mine);
+    if (!lastIncoming?.text) return;
+    setAiThreadBusy(true);
+    try {
+      const res = await draftReply(lastIncoming.text);
+      if (res.ok) setReply(res.text || "");
+    } catch { /* ignore */ }
+    setAiThreadBusy(false);
+  };
 
   const iStyle = (id) => fieldStyle(focus, id);
   const upF = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -88,11 +178,88 @@ export default function InboxPage() {
 
   return (
     <div style={{flex:1, overflowY:"auto", padding:"16px 14px 24px"}}>
-      {/* info banner */}
-      <div style={{...card, border:`1px solid ${C.blue}30`, background:`${C.blue}0f`}}>
-        <div style={{fontSize:12, color:C.muted, lineHeight:1.7}}>
-          💬 مزامنة رسائل إنستغرام المباشرة تُفعّل تلقائياً بعد ربط الحساب. حتى ذلك الحين، استخدم <strong style={{color:C.text}}>الردود الجاهزة</strong> ومساعد <strong style={{color:C.text}}>صياغة الرد بالذكاء الاصطناعي</strong> أدناه.
+      {/* Instagram DM conversations */}
+      <div style={card}>
+        <div style={{...subHead, display:"flex", justifyContent:"space-between", alignItems:"center"}}>
+          <span>💬 محادثات إنستغرام</span>
+          <button onClick={loadConvos} style={{background:"none", border:"none", color:C.muted, cursor:"pointer", fontSize:14}}>🔄</button>
         </div>
+
+        {convoState === "loading" && (
+          <p style={{fontSize:12, color:C.muted, lineHeight:1.7}}>جاري التحميل…</p>
+        )}
+
+        {convoState === "not_connected" && (
+          <p style={{fontSize:12, color:C.muted, lineHeight:1.7}}>
+            اربط حساب إنستغرام من <strong style={{color:C.text}}>الإعدادات ← الحسابات</strong> لعرض المحادثات والرد عليها من هنا.
+          </p>
+        )}
+
+        {convoState === "needs_permission" && (
+          <div style={{display:"flex",gap:8,fontSize:12,color:"#D4A020",background:"rgba(212,160,32,0.08)",border:"1px solid rgba(212,160,32,0.2)",borderRadius:10,padding:"10px 12px",lineHeight:1.7}}>
+            <span style={{flexShrink:0}}>⚠️</span>
+            <span>الرمز المتصل لا يملك صلاحية قراءة الرسائل. أعد إنشاء الرمز من لوحة ميتا مع تفعيل صلاحية «إدارة الرسائل» (instagram_business_manage_messages) ثم أعد ربطه من الإعدادات.{convoError ? ` (${convoError})` : ""}</span>
+          </div>
+        )}
+
+        {convoState === "error" && (
+          <p style={{fontSize:12, color:C.red, lineHeight:1.7}}>تعذّر تحميل المحادثات — اضغط 🔄 للمحاولة مجدداً.</p>
+        )}
+
+        {convoState === "ok" && convos.length === 0 && (
+          <p style={{fontSize:12, color:C.muted, lineHeight:1.7}}>لا توجد محادثات بعد.</p>
+        )}
+
+        {convoState === "ok" && convos.map(c => (
+          <div key={c.id} style={{borderBottom:`1px solid ${C.border}`, paddingBottom:10, marginBottom:10}}>
+            <div onClick={()=>toggleConvo(c)} style={{cursor:"pointer"}}>
+              <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", gap:10}}>
+                <span style={{fontWeight:700, fontSize:13}}>@{c.participant?.username || c.participant?.name || "مستخدم"}</span>
+                {c.lastMessage?.time && <span style={{fontSize:11, color:C.dim, flexShrink:0}}>{fmtTime(c.lastMessage.time)}</span>}
+              </div>
+              {c.lastMessage?.text && (
+                <div style={{fontSize:12, color:C.muted, marginTop:4, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}>{c.lastMessage.text}</div>
+              )}
+            </div>
+
+            {openId === c.id && (
+              <div style={{marginTop:12}}>
+                {threadLoading ? (
+                  <p style={{fontSize:12, color:C.muted}}>جاري التحميل…</p>
+                ) : (
+                  <div style={{display:"flex", flexDirection:"column", gap:8, maxHeight:220, overflowY:"auto", marginBottom:10, padding:"4px 2px"}}>
+                    {thread.length === 0 && <p style={{fontSize:12, color:C.muted}}>لا توجد رسائل.</p>}
+                    {thread.map(m => (
+                      <div key={m.id} style={{
+                        alignSelf: m.mine ? "flex-end" : "flex-start",
+                        background: m.mine ? `${C.accent}18` : C.inp,
+                        border: `1px solid ${m.mine ? C.accent+"30" : C.border}`,
+                        borderRadius:10, padding:"8px 12px", fontSize:12, lineHeight:1.6, maxWidth:"80%",
+                      }}>{m.text}</div>
+                    ))}
+                  </div>
+                )}
+                <textarea
+                  value={reply}
+                  onChange={e=>setReply(e.target.value)}
+                  placeholder="اكتب ردك هنا…"
+                  style={{...fieldStyle(focus,`reply_${c.id}`), resize:"none", height:64, lineHeight:1.6, fontSize:13, marginBottom:8}}
+                  onFocus={()=>setFocus(`reply_${c.id}`)}
+                  onBlur={()=>setFocus("")}
+                />
+                {sendError && <div style={{fontSize:12, color:C.red, marginBottom:8}}>{sendError}</div>}
+                <div style={{display:"flex", gap:8}}>
+                  <button onClick={()=>sendThreadReply(c)} disabled={sending || !reply.trim()} style={{...primaryBtn, flex:1, opacity:(sending||!reply.trim())?0.5:1}}>
+                    {sending ? "جاري الإرسال…" : "إرسال"}
+                  </button>
+                  <button onClick={aiDraftForThread} disabled={aiThreadBusy} style={{...ghostBtn, opacity:aiThreadBusy?0.5:1}}>
+                    {aiThreadBusy ? "…" : "✨ اقترح رد"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
 
       {/* AI reply drafter */}
