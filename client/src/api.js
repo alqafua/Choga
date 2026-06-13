@@ -71,6 +71,7 @@ export const getMetaCatalog = () => request("/api/meta/catalog").then((r) => r.j
 export const selectMetaCatalog = (catalogId) =>
   request("/api/meta/catalog/select", { method: "POST", body: JSON.stringify({ catalogId }) }).then((r) => r.json());
 export const syncMetaCatalog = () => request("/api/meta/catalog/sync", { method: "POST" }).then((r) => r.json());
+export const importMetaCatalog = () => request("/api/meta/catalog/import", { method: "POST" }).then((r) => r.json());
 
 // ── customers ─────────────────────────────────────────────────
 export const listCustomers = () => request("/api/customers").then((r) => r.json());

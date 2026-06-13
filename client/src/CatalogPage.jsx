@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { C, card, lbl, subHead, fieldStyle, statusChipStyle, primaryBtn, ghostBtn, dangerBtn } from "./theme";
 import {
   listCatalog, createCatalogItem, updateCatalogItem, deleteCatalogItem,
-  getMetaCatalog, selectMetaCatalog, syncMetaCatalog,
+  getMetaCatalog, selectMetaCatalog, syncMetaCatalog, importMetaCatalog,
 } from "./api";
 
 const CURRENCIES = [
@@ -27,6 +27,7 @@ export default function CatalogPage() {
   const [fbLoading,  setFbLoading]  = useState(true);
   const [fbSyncing,  setFbSyncing]  = useState(false);
   const [fbSyncMsg,  setFbSyncMsg]  = useState("");
+  const [fbImporting, setFbImporting] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -98,6 +99,23 @@ export default function CatalogPage() {
     setFbSyncing(false);
   };
 
+  const doImport = async () => {
+    setFbImporting(true);
+    setFbSyncMsg("");
+    try {
+      const res = await importMetaCatalog();
+      if (res.ok) {
+        setFbSyncMsg(`تم استيراد ${res.imported ?? 0} منتج جديد وتحديث ${res.updated ?? 0} من كتالوج فيسبوك ✅`);
+        await load();
+      } else {
+        setFbSyncMsg(res.error || "تعذّر الاستيراد");
+      }
+    } catch {
+      setFbSyncMsg("تعذّر الاستيراد");
+    }
+    setFbImporting(false);
+  };
+
   const filtered = items.filter(a => {
     const q = search.trim();
     if (!q) return true;
@@ -137,7 +155,7 @@ export default function CatalogPage() {
           ) : (
             <>
               <p style={{fontSize:12, color:C.muted, marginBottom:10, lineHeight:1.8}}>
-                اختر الكتالوج الذي يُغذّي متجر إنستغرام، ثم اضغط «مزامنة الآن» لرفع منتجات Choga المُفعّلة إليه.
+                اختر الكتالوج الذي يُغذّي متجر إنستغرام. «استيراد من فيسبوك» يجلب منتجاته الحالية إلى Choga، و«مزامنة الآن» يرفع تعديلاتك من Choga إليه.
               </p>
               <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:14}}>
                 {fbCatalog.catalogs.map(c => (
@@ -147,9 +165,14 @@ export default function CatalogPage() {
                 ))}
               </div>
               {fbCatalog.selectedCatalogId && (
-                <button onClick={doSync} disabled={fbSyncing} style={{...primaryBtn, opacity: fbSyncing ? 0.6 : 1}}>
-                  {fbSyncing ? "جاري المزامنة…" : "🔄 مزامنة الآن"}
-                </button>
+                <div style={{display:"flex", gap:10}}>
+                  <button onClick={doImport} disabled={fbImporting} style={{...primaryBtn, flex:1, opacity: fbImporting ? 0.6 : 1}}>
+                    {fbImporting ? "جاري الاستيراد…" : "📥 استيراد من فيسبوك"}
+                  </button>
+                  <button onClick={doSync} disabled={fbSyncing} style={{...ghostBtn, flex:1, opacity: fbSyncing ? 0.6 : 1}}>
+                    {fbSyncing ? "جاري المزامنة…" : "🔄 مزامنة الآن"}
+                  </button>
+                </div>
               )}
               {fbSyncMsg && <div style={{fontSize:12, color: fbSyncMsg.includes("✅") ? C.green : C.red, marginTop:10, lineHeight:1.7}}>{fbSyncMsg}</div>}
             </>
