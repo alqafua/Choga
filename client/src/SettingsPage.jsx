@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { C, card, lbl, subHead, fieldStyle, chipStyle, primaryBtn, dangerBtn, OCCASIONS } from "./theme";
-import { getSettings, saveSettings, getMetaStatus, connectMetaToken, disconnectMeta, getTikTokStatus, disconnectTikTok, getYouTubeStatus, disconnectYouTube } from "./api";
+import { getSettings, saveSettings, getMetaStatus, connectMetaToken, disconnectMeta, getTikTokStatus, disconnectTikTok, getYouTubeStatus, disconnectYouTube, getSnapchatStatus } from "./api";
 
 const TONES     = ["راقٍ وودّي","احترافي","حماسي","عاطفي","بسيط وصريح"];
 const TRAITS    = ["فاخر","حرفي","دافئ","مناسباتي","ودّي","مبدع","موثوق","أنيق"];
@@ -8,7 +8,7 @@ const TRAITS    = ["فاخر","حرفي","دافئ","مناسباتي","ودّي
 const PLATFORMS = [
   { id:"instagram", name:"إنستغرام",  color:"#E1306C", icon:"📸", prefix:"@",    note:null },
   { id:"facebook",  name:"فيسبوك",    color:"#4A90D9", icon:"📘", prefix:"",     note:null },
-  { id:"snapchat",  name:"سناب شات", color:"#F5D020", icon:"👻", prefix:"@",    note:"النشر يدوي فقط — لا يوجد API رسمي" },
+  { id:"snapchat",  name:"سناب شات", color:"#F5D020", icon:"👻", prefix:"@",    note:"النشر التلقائي عبر خدمة Ayrshare المدفوعة — راجع بطاقة «ربط سناب شات» في الأعلى" },
   { id:"tiktok",    name:"تيك توك",   color:"#69C9D0", icon:"🎵", prefix:"@",    note:"يحتاج موافقة من المنصّة" },
   { id:"youtube",   name:"يوتيوب",   color:"#FF0000", icon:"▶️", prefix:"@",    note:null },
   { id:"whatsapp",  name:"واتساب",    color:"#25D366", icon:"💬", prefix:"+967", note:null },
@@ -20,6 +20,7 @@ const API_FIELDS = [
   { id:"tiktokClientSecret", name:"TikTok — Client Secret",  desc:"النشر على تيك توك (الرمز السري)",        where:"developers.tiktok.com  ←  Apps  ←  Keys", ph:"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" },
   { id:"youtubeClientId",     name:"YouTube — Client ID",     desc:"النشر على يوتيوب شورتس (المعرّف)",       where:"console.cloud.google.com  ←  Credentials", ph:"xxxxxxxxxxxx.apps.googleusercontent.com" },
   { id:"youtubeClientSecret", name:"YouTube — Client Secret", desc:"النشر على يوتيوب شورتس (الرمز السري)",   where:"console.cloud.google.com  ←  Credentials", ph:"GOCSPX-xxxxxxxxxxxxxxxxxxxxxxxx" },
+  { id:"ayrshareApiKey",      name:"Ayrshare — API Key",      desc:"النشر على سناب شات (يحتاج خطة Premium)", where:"app.ayrshare.com  ←  API Key",             ph:"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" },
 ];
 
 const TIKTOK_GUIDE_STEPS = [
@@ -40,6 +41,13 @@ const YOUTUBE_GUIDE_STEPS = [
   "رجوعاً لتبويب «الحسابات» — اضغط «ربط يوتيوب» لإكمال الربط عبر تسجيل الدخول",
 ];
 
+const AYRSHARE_GUIDE_STEPS = [
+  "أنشئ حساباً على Ayrshare ثم فعّل خطة Premium (149$/شهر) — مطلوبة لدعم سناب شات",
+  "من لوحة Ayrshare: \"Social Accounts\" ← اربط حساب سناب شات الخاص بالمحل",
+  "من القائمة الجانبية اضغط \"API Key\" وانسخ المفتاح",
+  "الصق المفتاح في الحقل أعلاه ثم احفظ الإعدادات",
+];
+
 const API_GUIDES = {
   anthropic: {
     url: "https://console.anthropic.com/settings/keys",
@@ -55,6 +63,7 @@ const API_GUIDES = {
   tiktokClientSecret: { url: "https://developers.tiktok.com/apps", steps: TIKTOK_GUIDE_STEPS },
   youtubeClientId:     { url: "https://console.cloud.google.com/apis/credentials", steps: YOUTUBE_GUIDE_STEPS },
   youtubeClientSecret: { url: "https://console.cloud.google.com/apis/credentials", steps: YOUTUBE_GUIDE_STEPS },
+  ayrshareApiKey:      { url: "https://app.ayrshare.com/api-key", steps: AYRSHARE_GUIDE_STEPS },
 };
 
 const DEF = {
@@ -69,7 +78,7 @@ const DEF = {
   occasions:["أعراس","عيد الفطر","عيد الأضحى","رمضان"],
   priceRange:"", extra:"",
   platforms:{ instagram:"choga.yo", facebook:"CHOGA", snapchat:"", tiktok:"", youtube:"", whatsapp:"" },
-  api:{ anthropic:"", tiktokClientKey:"", tiktokClientSecret:"", youtubeClientId:"", youtubeClientSecret:"" },
+  api:{ anthropic:"", tiktokClientKey:"", tiktokClientSecret:"", youtubeClientId:"", youtubeClientSecret:"", ayrshareApiKey:"" },
 };
 
 export default function SettingsPage() {
@@ -102,6 +111,8 @@ export default function SettingsPage() {
     if (result === "error") return "تعذّر الربط — حاول مجدداً";
     return "";
   });
+
+  const [snapchat, setSnapchat] = useState(null);
 
   useEffect(()=>{
     (async()=>{
@@ -142,6 +153,13 @@ export default function SettingsPage() {
         setYoutube(await getYouTubeStatus());
       } catch {
         setYoutube({ configured:false, connected:false });
+      }
+    })();
+    (async()=>{
+      try {
+        setSnapchat(await getSnapchatStatus());
+      } catch {
+        setSnapchat({ configured:false, connected:false });
       }
     })();
   },[]);
@@ -434,6 +452,23 @@ export default function SettingsPage() {
                   <div style={{fontSize:12,color:C.muted,lineHeight:1.7}}>أكمل وحفظ مفتاحي API أعلاه أولاً لتفعيل الربط</div>
                 )}
               </>
+            )}
+          </div>
+
+          <div style={card}>
+            <div style={subHead}>ربط سناب شات</div>
+            {snapchat?.connected ? (
+              <div style={{fontSize:13,marginBottom:4,lineHeight:1.8}}>
+                <span style={{color:C.green,fontWeight:700}}>متصل ✓</span> — عبر Ayrshare
+              </div>
+            ) : snapchat?.configured ? (
+              <p style={{fontSize:12,color:C.muted,lineHeight:1.7}}>
+                تم إضافة مفتاح Ayrshare، لكن لم يظهر حساب سناب شات بعد. اربط الحساب من لوحة تحكم Ayrshare (Social Accounts) ثم أعد تحميل هذه الصفحة.
+              </p>
+            ) : (
+              <p style={{fontSize:12,color:C.muted,lineHeight:1.7}}>
+                النشر على سناب شات يتم عبر خدمة <strong>Ayrshare</strong> المدفوعة (خطة Premium بسعر 149$/شهر). أنشئ حساباً على Ayrshare، اربط سناب شات من لوحته، ثم أضف مفتاح API الخاص بـ Ayrshare من تبويب <strong>مفاتيح API</strong> أدناه واحفظ الإعدادات.
+              </p>
             )}
           </div>
 

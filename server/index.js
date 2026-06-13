@@ -302,10 +302,44 @@ async function publishToYouTube(item) {
   }
 }
 
+// Post to Snapchat via Ayrshare — Snapchat has no public API for organic
+// content, so Ayrshare (a paid aggregator) posts on our behalf once the
+// account is linked on Ayrshare's own dashboard. Configured entirely via
+// the API key pasted into Settings ← مفاتيح API (self-serve, no OAuth here).
+async function publishToSnapchat(item) {
+  const settings = readSettings();
+  const apiKey = settings?.api?.ayrshareApiKey;
+  if (!apiKey) return { ok: false, error: "snapchat_not_connected" };
+  if (!item.image && !item.video) return { ok: false, error: "media_required" };
+
+  try {
+    const r = await fetch("https://api.ayrshare.com/api/post", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        post: item.caption || "",
+        platforms: ["snapchat"],
+        mediaUrls: [item.video || item.image],
+      }),
+    });
+    const data = await r.json();
+    if (data.status === "error" || data.errors?.length) {
+      const msg = data.errors?.[0]?.message || data.message || "snapchat publish failed";
+      return { ok: false, error: msg };
+    }
+    const postId = data.postIds?.find((p) => p.platform === "snapchat")?.id || null;
+    return { ok: true, postId };
+  } catch (err) {
+    console.error("snapchat publish error:", err);
+    return { ok: false, error: "snapchat publish failed" };
+  }
+}
+
 // Dispatch a content item to the right platform publisher.
 async function publishContentItem(item) {
   if (item.platform === "tiktok") return publishToTikTok(item);
   if (item.platform === "youtube") return publishToYouTube(item);
+  if (item.platform === "snapchat") return publishToSnapchat(item);
   return publishToMeta(item);
 }
 
@@ -1093,6 +1127,27 @@ app.post("/api/youtube/disconnect", requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Snapchat connection status (via Ayrshare) ───────────────────────────
+// Ayrshare manages the actual Snapchat account link on its own dashboard;
+// our server only needs the API key pasted into Settings ← مفاتيح API.
+app.get("/api/snapchat/status", requireAuth, async (req, res) => {
+  const settings = readSettings();
+  const apiKey = settings?.api?.ayrshareApiKey;
+  if (!apiKey) return res.json({ configured: false, connected: false });
+
+  try {
+    const r = await fetch("https://api.ayrshare.com/api/user", {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    const data = await r.json();
+    const connected = !!(data.activeSocialAccounts || []).includes("snapchat");
+    res.json({ configured: true, connected });
+  } catch (err) {
+    console.error("snapchat status error:", err);
+    res.json({ configured: true, connected: false });
+  }
+});
+
 // ── product catalog sync (Facebook Commerce Manager → Instagram Shop) ──
 // Discover product catalogs the connected account manages, so local
 // catalog items can be pushed into the same catalog feeding Instagram Shop.
@@ -1266,7 +1321,7 @@ async function runAutoPublish() {
     const today = new Date().toISOString().slice(0, 10);
     const due = content.list().filter((i) =>
       i.status === "ready" &&
-      ["instagram", "facebook", "tiktok", "youtube"].includes(i.platform) &&
+      ["instagram", "facebook", "tiktok", "youtube", "snapchat"].includes(i.platform) &&
       (!i.scheduledDate || i.scheduledDate <= today)
     );
     for (const item of due) {

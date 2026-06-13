@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { C, card, subHead, statusChipStyle, primaryBtn, platformInfo } from "./theme";
-import { listContent, updateContent, publishContent, getSettings, saveSettings, getMetaStatus, getTikTokStatus, getYouTubeStatus } from "./api";
+import { listContent, updateContent, publishContent, getSettings, saveSettings, getMetaStatus, getTikTokStatus, getYouTubeStatus, getSnapchatStatus } from "./api";
 
 const ERROR_LABELS = {
   meta_not_connected: "يجب ربط حساب ميتا من الإعدادات أولاً",
@@ -8,8 +8,10 @@ const ERROR_LABELS = {
   instagram_not_connected: "لا يوجد حساب إنستغرام مرتبط بحساب ميتا",
   tiktok_not_connected: "يجب ربط حساب تيك توك من الإعدادات أولاً",
   youtube_not_connected: "يجب ربط حساب يوتيوب من الإعدادات أولاً",
+  snapchat_not_connected: "يجب ربط حساب سناب شات عبر Ayrshare من الإعدادات أولاً",
   image_required: "أضف صورة لهذا المنشور من تبويب التخطيط لتفعيل النشر التلقائي",
   video_required: "أضف رابط فيديو لهذا المنشور من تبويب التخطيط لتفعيل النشر التلقائي",
+  media_required: "أضف صورة أو رابط فيديو لهذا المنشور من تبويب التخطيط لتفعيل النشر التلقائي",
   video_fetch_failed: "تعذّر تحميل الفيديو من الرابط المضاف — تأكد من صحته",
   unsupported_platform: "هذه المنصة لا تدعم النشر التلقائي بعد",
 };
@@ -21,6 +23,7 @@ export default function PublishPage() {
   const [meta,     setMeta]     = useState(null);
   const [tiktok,   setTiktok]   = useState(null);
   const [youtube,  setYoutube]  = useState(null);
+  const [snapchat, setSnapchat] = useState(null);
   const [loading,  setLoading]  = useState(true);
   const [busyId,   setBusyId]   = useState(null);
   const [errors,   setErrors]   = useState({});
@@ -29,12 +32,13 @@ export default function PublishPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const [c, s, m, t, y] = await Promise.all([listContent(), getSettings(), getMetaStatus(), getTikTokStatus(), getYouTubeStatus()]);
+      const [c, s, m, t, y, sc] = await Promise.all([listContent(), getSettings(), getMetaStatus(), getTikTokStatus(), getYouTubeStatus(), getSnapchatStatus()]);
       setItems(c);
       setSettings(s || {});
       setMeta(m);
       setTiktok(t);
       setYoutube(y);
+      setSnapchat(sc);
     } catch {
       setItems([]);
     }
@@ -101,8 +105,8 @@ export default function PublishPage() {
         </div>
         <p style={{fontSize:12, color:C.muted, lineHeight:1.7}}>
           {publishMode === "auto"
-            ? "سيُنشر المحتوى «جاهز للنشر» على إنستغرام وفيسبوك وتيك توك ويوتيوب تلقائياً عند حلول تاريخه المخطط (يحتاج صورة للمنشورات على إنستغرام/تيك توك، ورابط فيديو للمنشورات على يوتيوب). باقي المنصات تبقى يدوية."
-            : "النشر على إنستغرام وفيسبوك وتيك توك ويوتيوب يتم بضغطة «نشر الآن 🚀» — وباقي المنصات تبقى يدوية بالكامل."}
+            ? "سيُنشر المحتوى «جاهز للنشر» على إنستغرام وفيسبوك وتيك توك ويوتيوب وسناب شات تلقائياً عند حلول تاريخه المخطط (يحتاج صورة للمنشورات على إنستغرام/تيك توك، ورابط فيديو للمنشورات على يوتيوب، وصورة أو فيديو لسناب شات). باقي المنصات تبقى يدوية."
+            : "النشر على إنستغرام وفيسبوك وتيك توك ويوتيوب وسناب شات يتم بضغطة «نشر الآن 🚀» — وباقي المنصات تبقى يدوية بالكامل."}
         </p>
       </div>
 
@@ -120,10 +124,12 @@ export default function PublishPage() {
           const fbOk = !!(meta?.connected && meta.fbPageName);
           const ttOk = !!tiktok?.connected;
           const ytOk = !!youtube?.connected;
-          const apiSupported = (item.platform === "instagram" && igOk) || (item.platform === "facebook" && fbOk) || (item.platform === "tiktok" && ttOk) || (item.platform === "youtube" && ytOk);
+          const scOk = !!snapchat?.connected;
+          const apiSupported = (item.platform === "instagram" && igOk) || (item.platform === "facebook" && fbOk) || (item.platform === "tiktok" && ttOk) || (item.platform === "youtube" && ytOk) || (item.platform === "snapchat" && scOk);
           const needsImage = (item.platform === "instagram" || item.platform === "tiktok") && !item.image;
           const needsVideo = item.platform === "youtube" && !item.video;
-          const needsMedia = needsImage || needsVideo;
+          const needsAnyMedia = item.platform === "snapchat" && !item.image && !item.video;
+          const needsMedia = needsImage || needsVideo || needsAnyMedia;
           const canPublishNow = apiSupported && !needsMedia;
           const busy = busyId === item.id;
 
@@ -151,7 +157,7 @@ export default function PublishPage() {
 
               {apiSupported && needsMedia && (
                 <div style={{marginBottom:10,display:"flex",gap:8,fontSize:11,color:"#D4A020",background:"rgba(212,160,32,0.08)",border:"1px solid rgba(212,160,32,0.2)",borderRadius:10,padding:"8px 12px",lineHeight:1.6}}>
-                  <span style={{flexShrink:0}}>⚠️</span><span>{needsVideo ? "أضف رابط فيديو لهذا المنشور من تبويب التخطيط لتفعيل النشر التلقائي" : "أضف صورة لهذا المنشور من تبويب التخطيط لتفعيل النشر التلقائي"}</span>
+                  <span style={{flexShrink:0}}>⚠️</span><span>{needsAnyMedia ? errorLabel("media_required") : needsVideo ? errorLabel("video_required") : errorLabel("image_required")}</span>
                 </div>
               )}
 

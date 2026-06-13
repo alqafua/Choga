@@ -187,9 +187,9 @@ export default function PlanPage() {
             )}
           </div>
 
-          {form.platform === "youtube" && (
+          {(form.platform === "youtube" || form.platform === "snapchat") && (
             <div style={{marginBottom:14}}>
-              <label style={lbl}>رابط الفيديو (mp4 — مطلوب للنشر التلقائي على يوتيوب شورتس)</label>
+              <label style={lbl}>رابط الفيديو (mp4 — مطلوب للنشر التلقائي على يوتيوب شورتس، اختياري لسناب شات)</label>
               <input style={{...iStyle("video"),direction:"ltr",textAlign:"right",fontFamily:"monospace",fontSize:12}} value={form.video} onFocus={()=>setFocus("video")} onBlur={()=>setFocus("")} onChange={e=>upF("video",e.target.value)} placeholder="https://...الصق رابط الفيديو" />
               {form.video && (
                 <video src={form.video} controls style={{width:"100%",maxHeight:220,borderRadius:12,marginTop:10,border:`1px solid ${C.border}`}} />

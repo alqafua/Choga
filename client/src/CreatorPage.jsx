@@ -136,9 +136,9 @@ export default function CreatorPage() {
             <img src={image} alt="" style={{width:"100%",maxHeight:140,objectFit:"cover",borderRadius:12,marginTop:10,border:`1px solid ${C.border}`}} onError={(e)=>{e.target.style.display="none";}} onLoad={(e)=>{e.target.style.display="block";}} />
           )}
         </div>
-        {platform === "youtube" && (
+        {(platform === "youtube" || platform === "snapchat") && (
           <div style={{marginBottom:14}}>
-            <label style={lbl}>رابط الفيديو (mp4 — مطلوب للنشر التلقائي على يوتيوب شورتس)</label>
+            <label style={lbl}>رابط الفيديو (mp4 — مطلوب للنشر التلقائي على يوتيوب شورتس، اختياري لسناب شات)</label>
             <input style={{...iStyle("video"),direction:"ltr",textAlign:"right",fontFamily:"monospace",fontSize:12}} value={video} onFocus={()=>setFocus("video")} onBlur={()=>setFocus("")} onChange={e=>setVideo(e.target.value)} placeholder="https://...الصق رابط الفيديو" />
             {video && (
               <video src={video} controls style={{width:"100%",maxHeight:220,borderRadius:12,marginTop:10,border:`1px solid ${C.border}`}} />

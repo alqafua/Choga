@@ -74,6 +74,9 @@ export const disconnectTikTok = () => request("/api/tiktok/disconnect", { method
 export const getYouTubeStatus = () => request("/api/youtube/status").then((r) => r.json());
 export const disconnectYouTube = () => request("/api/youtube/disconnect", { method: "POST" }).then((r) => r.json());
 
+// ── Snapchat connection (via Ayrshare) ─────────────────────────────
+export const getSnapchatStatus = () => request("/api/snapchat/status").then((r) => r.json());
+
 // ── Instagram DM inbox ───────────────────────────────────────────
 export const getConversations = () => request("/api/meta/conversations").then((r) => r.json());
 export const getConversationMessages = (id) =>
