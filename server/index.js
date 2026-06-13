@@ -51,6 +51,55 @@ function writeMetaConnection(data) {
   fs.writeFileSync(META_FILE, JSON.stringify(data, null, 2));
 }
 
+// Publish a content item to its target platform via the Meta Graph API.
+// Returns { ok: true, postId } on success or { ok: false, error } otherwise.
+async function publishToMeta(item) {
+  const conn = readMetaConnection();
+  if (!conn?.accessToken) return { ok: false, error: "meta_not_connected" };
+
+  if (item.platform === "facebook") {
+    if (!conn.pageId) return { ok: false, error: "facebook_not_connected" };
+    const body = new URLSearchParams({ access_token: conn.accessToken });
+    const endpoint = item.image
+      ? `https://graph.facebook.com/v21.0/${conn.pageId}/photos`
+      : `https://graph.facebook.com/v21.0/${conn.pageId}/feed`;
+    if (item.image) {
+      body.set("url", item.image);
+      body.set("caption", item.caption || "");
+    } else {
+      body.set("message", item.caption || "");
+    }
+    const r = await fetch(endpoint, { method: "POST", body });
+    const data = await r.json();
+    if (data.error) return { ok: false, error: data.error.message };
+    return { ok: true, postId: data.post_id || data.id };
+  }
+
+  if (item.platform === "instagram") {
+    if (!conn.igUserId) return { ok: false, error: "instagram_not_connected" };
+    if (!item.image) return { ok: false, error: "image_required" };
+    const base = conn.pageId ? "https://graph.facebook.com/v21.0" : `${IG_GRAPH}/v21.0`;
+    const containerBody = new URLSearchParams({
+      image_url: item.image,
+      caption: item.caption || "",
+      access_token: conn.accessToken,
+    });
+    if (item.type === "ستوري") containerBody.set("media_type", "STORIES");
+    const containerRes = await fetch(`${base}/${conn.igUserId}/media`, { method: "POST", body: containerBody });
+    const containerData = await containerRes.json();
+    if (containerData.error) return { ok: false, error: containerData.error.message };
+    const publishRes = await fetch(`${base}/${conn.igUserId}/media_publish`, {
+      method: "POST",
+      body: new URLSearchParams({ creation_id: containerData.id, access_token: conn.accessToken }),
+    });
+    const publishData = await publishRes.json();
+    if (publishData.error) return { ok: false, error: publishData.error.message };
+    return { ok: true, postId: publishData.id };
+  }
+
+  return { ok: false, error: "unsupported_platform" };
+}
+
 const app = express();
 app.set("trust proxy", 1);
 app.use(express.json({ limit: "2mb" }));
@@ -170,6 +219,23 @@ app.put("/api/content/:id", requireAuth, (req, res) => {
 app.delete("/api/content/:id", requireAuth, (req, res) => {
   if (!content.remove(req.params.id)) return res.status(404).json({ error: "not found" });
   res.json({ ok: true });
+});
+
+// Publish a "ready" content item to Instagram/Facebook right now via the
+// connected Meta account, and mark it as published on success.
+app.post("/api/content/:id/publish", requireAuth, async (req, res) => {
+  const item = content.list().find((i) => i.id === req.params.id);
+  if (!item) return res.status(404).json({ ok: false, error: "not found" });
+
+  const result = await publishToMeta(item);
+  if (!result.ok) return res.status(400).json(result);
+
+  const updated = content.update(item.id, {
+    status: "published",
+    publishedAt: new Date().toISOString(),
+    publishedPostId: result.postId,
+  });
+  res.json({ ok: true, item: updated });
 });
 
 // ── assets (raw materials / reusable library) ──────────────────
@@ -719,6 +785,33 @@ app.use(express.static(clientDist));
 app.get("*", (req, res) => {
   res.sendFile(path.join(clientDist, "index.html"));
 });
+
+// ── auto-publish: posts "ready" Instagram/Facebook content when due ─────
+async function runAutoPublish() {
+  try {
+    const settings = readSettings();
+    if (settings?.publishMode !== "auto") return;
+    const today = new Date().toISOString().slice(0, 10);
+    const due = content.list().filter((i) =>
+      i.status === "ready" &&
+      ["instagram", "facebook"].includes(i.platform) &&
+      (!i.scheduledDate || i.scheduledDate <= today)
+    );
+    for (const item of due) {
+      const result = await publishToMeta(item);
+      if (result.ok) {
+        content.update(item.id, { status: "published", publishedAt: new Date().toISOString(), publishedPostId: result.postId });
+      } else {
+        console.error(`auto-publish failed for "${item.title}":`, result.error);
+      }
+    }
+  } catch (err) {
+    console.error("auto-publish loop error:", err);
+  }
+}
+
+setTimeout(runAutoPublish, 30 * 1000);
+setInterval(runAutoPublish, 10 * 60 * 1000);
 
 app.listen(PORT, () => {
   console.log(`Choga server running on port ${PORT}`);

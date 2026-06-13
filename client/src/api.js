@@ -99,6 +99,8 @@ export const updateContent = (id, data) =>
   request(`/api/content/${id}`, { method: "PUT", body: JSON.stringify(data) }).then((r) => r.json());
 export const deleteContent = (id) =>
   request(`/api/content/${id}`, { method: "DELETE" }).then((r) => r.json());
+export const publishContent = (id) =>
+  request(`/api/content/${id}/publish`, { method: "POST" }).then((r) => r.json());
 
 // ── assets (raw materials library) ───────────────────────────
 export const listAssets = () => request("/api/assets").then((r) => r.json());

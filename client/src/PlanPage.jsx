@@ -6,7 +6,7 @@ const todayStr = () => new Date().toISOString().slice(0, 10);
 
 const emptyForm = () => ({
   title: "", platform: "instagram", occasion: "", type: CONTENT_TYPES[0],
-  scheduledDate: todayStr(), caption: "", notes: "", status: "draft",
+  scheduledDate: todayStr(), caption: "", image: "", notes: "", status: "draft",
 });
 
 export default function PlanPage() {
@@ -52,6 +52,7 @@ export default function PlanPage() {
       type: item.type || CONTENT_TYPES[0],
       scheduledDate: item.scheduledDate || todayStr(),
       caption: item.caption || "",
+      image: item.image || "",
       notes: item.notes || "",
       status: item.status || "draft",
     });
@@ -178,6 +179,14 @@ export default function PlanPage() {
           </div>
 
           <div style={{marginBottom:14}}>
+            <label style={lbl}>رابط الصورة (مطلوب للنشر التلقائي على إنستغرام)</label>
+            <input style={{...iStyle("image"),direction:"ltr",textAlign:"right",fontFamily:"monospace",fontSize:12}} value={form.image} onFocus={()=>setFocus("image")} onBlur={()=>setFocus("")} onChange={e=>upF("image",e.target.value)} placeholder="https://...الصق رابط الصورة" />
+            {form.image && (
+              <img src={form.image} alt="" style={{width:"100%",maxHeight:140,objectFit:"cover",borderRadius:12,marginTop:10,border:`1px solid ${C.border}`}} onError={(e)=>{e.target.style.display="none";}} onLoad={(e)=>{e.target.style.display="block";}} />
+            )}
+          </div>
+
+          <div style={{marginBottom:14}}>
             <label style={lbl}>ملاحظات</label>
             <textarea style={{...iStyle("notes"),resize:"none",height:60,lineHeight:1.6}} value={form.notes} onFocus={()=>setFocus("notes")} onBlur={()=>setFocus("")} onChange={e=>upF("notes",e.target.value)} />
           </div>
@@ -216,6 +225,7 @@ export default function PlanPage() {
                     {item.type && <span>· {item.type}</span>}
                     {item.occasion && <span>· {item.occasion}</span>}
                     {item.scheduledDate && <span>· 📅 {item.scheduledDate}</span>}
+                    {item.image && <span>· 🖼️ صورة</span>}
                   </div>
                 </div>
                 <div style={{display:"flex", gap:8, flexShrink:0}}>
