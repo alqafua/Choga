@@ -66,6 +66,12 @@ export const connectMetaToken = (token) =>
   request("/api/meta/token", { method: "POST", body: JSON.stringify({ token }) }).then((r) => r.json());
 export const disconnectMeta = () => request("/api/meta/disconnect", { method: "POST" }).then((r) => r.json());
 
+// ── product catalog sync (Facebook Commerce Manager / Instagram Shop) ──
+export const getMetaCatalog = () => request("/api/meta/catalog").then((r) => r.json());
+export const selectMetaCatalog = (catalogId) =>
+  request("/api/meta/catalog/select", { method: "POST", body: JSON.stringify({ catalogId }) }).then((r) => r.json());
+export const syncMetaCatalog = () => request("/api/meta/catalog/sync", { method: "POST" }).then((r) => r.json());
+
 // ── customers ─────────────────────────────────────────────────
 export const listCustomers = () => request("/api/customers").then((r) => r.json());
 export const createCustomer = (data) =>

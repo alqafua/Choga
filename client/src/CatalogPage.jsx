@@ -1,8 +1,17 @@
 import { useState, useEffect } from "react";
 import { C, card, lbl, subHead, fieldStyle, statusChipStyle, primaryBtn, ghostBtn, dangerBtn } from "./theme";
-import { listCatalog, createCatalogItem, updateCatalogItem, deleteCatalogItem } from "./api";
+import {
+  listCatalog, createCatalogItem, updateCatalogItem, deleteCatalogItem,
+  getMetaCatalog, selectMetaCatalog, syncMetaCatalog,
+} from "./api";
 
-const emptyForm = () => ({ name: "", price: "", image: "", description: "", visible: true });
+const CURRENCIES = [
+  { id: "YER", label: "ر.ي" },
+  { id: "SAR", label: "ر.س" },
+  { id: "USD", label: "$" },
+];
+
+const emptyForm = () => ({ name: "", price: "", priceAmount: "", currency: "YER", image: "", description: "", visible: true });
 
 export default function CatalogPage() {
   const [items,     setItems]     = useState([]);
@@ -14,13 +23,25 @@ export default function CatalogPage() {
   const [focus,     setFocus]     = useState("");
   const [saving,    setSaving]    = useState(false);
 
+  const [fbCatalog,  setFbCatalog]  = useState(null);
+  const [fbLoading,  setFbLoading]  = useState(true);
+  const [fbSyncing,  setFbSyncing]  = useState(false);
+  const [fbSyncMsg,  setFbSyncMsg]  = useState("");
+
   const load = async () => {
     setLoading(true);
     try { setItems(await listCatalog()); } catch { setItems([]); }
     setLoading(false);
   };
 
+  const loadFbCatalog = async () => {
+    setFbLoading(true);
+    try { setFbCatalog(await getMetaCatalog()); } catch { setFbCatalog(null); }
+    setFbLoading(false);
+  };
+
   useEffect(() => { (async () => { await load(); })(); }, []);
+  useEffect(() => { (async () => { await loadFbCatalog(); })(); }, []);
 
   const iStyle = (id) => fieldStyle(focus, id);
   const upF = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -29,8 +50,9 @@ export default function CatalogPage() {
   const openEdit = (item) => {
     setEditingId(item.id);
     setForm({
-      name: item.name || "", price: item.price || "", image: item.image || "",
-      description: item.description || "", visible: item.visible !== false,
+      name: item.name || "", price: item.price || "",
+      priceAmount: item.priceAmount ?? "", currency: item.currency || "YER",
+      image: item.image || "", description: item.description || "", visible: item.visible !== false,
     });
     setFormOpen(true);
   };
@@ -59,6 +81,23 @@ export default function CatalogPage() {
     await load();
   };
 
+  const selectCatalog = async (id) => {
+    await selectMetaCatalog(id);
+    setFbCatalog(c => ({ ...c, selectedCatalogId: id }));
+  };
+
+  const doSync = async () => {
+    setFbSyncing(true);
+    setFbSyncMsg("");
+    try {
+      const res = await syncMetaCatalog();
+      setFbSyncMsg(res.ok ? `تمت مزامنة ${res.count ?? 0} منتج مع كتالوج فيسبوك ✅` : (res.error || "تعذّرت المزامنة"));
+    } catch {
+      setFbSyncMsg("تعذّرت المزامنة");
+    }
+    setFbSyncing(false);
+  };
+
   const filtered = items.filter(a => {
     const q = search.trim();
     if (!q) return true;
@@ -66,6 +105,7 @@ export default function CatalogPage() {
   });
 
   const visibleCount = items.filter(a => a.visible !== false).length;
+  const currencyLabel = (id) => (CURRENCIES.find(c => c.id === id) || CURRENCIES[0]).label;
 
   return (
     <div style={{flex:1, overflowY:"auto", padding:"16px 14px 24px"}}>
@@ -81,6 +121,42 @@ export default function CatalogPage() {
         المنتجات المُفعّلة (👁️ {visibleCount} من {items.length}) تظهر في موقع المتجر العام تلقائياً.
       </p>
 
+      {/* ── Facebook / Instagram Shop catalog sync ── */}
+      {!fbLoading && fbCatalog?.connected && (
+        <div style={card}>
+          <div style={subHead}>مزامنة كتالوج فيسبوك / متجر إنستغرام</div>
+          {fbCatalog.needsPermission ? (
+            <p style={{fontSize:12, color:C.muted, lineHeight:1.8}}>
+              يحتاج ربط ميتا صلاحية إضافية (<code style={{color:C.accent2}}>catalog_management</code>) للوصول إلى كتالوج المنتجات.
+              أعد توليد رمز الوصول من Graph API Explorer مع تفعيل هذه الصلاحية، ثم أعد لصقه من تبويب «الإعدادات» ← «الحسابات».
+            </p>
+          ) : !fbCatalog.catalogs?.length ? (
+            <p style={{fontSize:12, color:C.muted, lineHeight:1.8}}>
+              لم يتم العثور على كتالوج منتجات في حسابك على ميتا. أنشئ كتالوجاً من Commerce Manager أولاً ثم حدّث هذه الصفحة.
+            </p>
+          ) : (
+            <>
+              <p style={{fontSize:12, color:C.muted, marginBottom:10, lineHeight:1.8}}>
+                اختر الكتالوج الذي يُغذّي متجر إنستغرام، ثم اضغط «مزامنة الآن» لرفع منتجات Choga المُفعّلة إليه.
+              </p>
+              <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:14}}>
+                {fbCatalog.catalogs.map(c => (
+                  <button key={c.id} onClick={()=>selectCatalog(c.id)} style={statusChipStyle(fbCatalog.selectedCatalogId===c.id, C.accent)}>
+                    {c.name}{c.productCount != null ? ` (${c.productCount})` : ""}
+                  </button>
+                ))}
+              </div>
+              {fbCatalog.selectedCatalogId && (
+                <button onClick={doSync} disabled={fbSyncing} style={{...primaryBtn, opacity: fbSyncing ? 0.6 : 1}}>
+                  {fbSyncing ? "جاري المزامنة…" : "🔄 مزامنة الآن"}
+                </button>
+              )}
+              {fbSyncMsg && <div style={{fontSize:12, color: fbSyncMsg.includes("✅") ? C.green : C.red, marginTop:10, lineHeight:1.7}}>{fbSyncMsg}</div>}
+            </>
+          )}
+        </div>
+      )}
+
       {formOpen && (
         <form onSubmit={submit} style={card}>
           <div style={subHead}>{editingId ? "تعديل المنتج" : "منتج جديد"}</div>
@@ -89,8 +165,19 @@ export default function CatalogPage() {
             <input style={iStyle("name")} value={form.name} onFocus={()=>setFocus("name")} onBlur={()=>setFocus("")} onChange={e=>upF("name",e.target.value)} placeholder="مثال: علبة شوكولاتة فاخرة" required />
           </div>
           <div style={{marginBottom:14}}>
-            <label style={lbl}>السعر</label>
+            <label style={lbl}>السعر (للعرض في الموقع)</label>
             <input style={iStyle("price")} value={form.price} onFocus={()=>setFocus("price")} onBlur={()=>setFocus("")} onChange={e=>upF("price",e.target.value)} placeholder="مثال: 8,000 ريال" />
+          </div>
+          <div style={{marginBottom:14}}>
+            <label style={lbl}>السعر الرقمي (لمزامنة كتالوج فيسبوك)</label>
+            <div style={{display:"flex", gap:8}}>
+              <input type="number" min="0" step="0.01" style={{...iStyle("priceAmount"), flex:1}} value={form.priceAmount} onFocus={()=>setFocus("priceAmount")} onBlur={()=>setFocus("")} onChange={e=>upF("priceAmount",e.target.value)} placeholder="8000" />
+              <div style={{display:"flex", gap:6}}>
+                {CURRENCIES.map(c => (
+                  <button type="button" key={c.id} onClick={()=>upF("currency",c.id)} style={statusChipStyle(form.currency===c.id, C.accent)}>{c.label}</button>
+                ))}
+              </div>
+            </div>
           </div>
           <div style={{marginBottom:14}}>
             <label style={lbl}>رابط الصورة</label>
@@ -143,6 +230,7 @@ export default function CatalogPage() {
                   </span>
                 </div>
                 {item.price && <div style={{fontSize:13, color:C.accent2, fontWeight:700, marginBottom:4}}>{item.price}</div>}
+                {item.priceAmount && <div style={{fontSize:11, color:C.muted, marginBottom:4}}>للمزامنة: {item.priceAmount} {currencyLabel(item.currency)}</div>}
                 {item.description && <div style={{fontSize:12, color:C.muted, lineHeight:1.6}}>{item.description}</div>}
               </div>
             </div>

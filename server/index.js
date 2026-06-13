@@ -555,6 +555,100 @@ app.post("/api/meta/disconnect", requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── product catalog sync (Facebook Commerce Manager → Instagram Shop) ──
+// Discover product catalogs the connected account manages, so local
+// catalog items can be pushed into the same catalog feeding Instagram Shop.
+app.get("/api/meta/catalog", requireAuth, async (req, res) => {
+  const conn = readMetaConnection();
+  if (!conn?.accessToken) return res.json({ connected: false });
+
+  try {
+    const bizRes = await fetch(
+      `https://graph.facebook.com/v21.0/me/businesses?fields=id,name&access_token=${conn.accessToken}`
+    );
+    const bizData = await bizRes.json();
+    if (bizData.error) {
+      return res.json({ connected: true, needsPermission: true, error: bizData.error.message, selectedCatalogId: conn.catalogId || null });
+    }
+
+    const catalogs = [];
+    for (const biz of bizData.data || []) {
+      const catRes = await fetch(
+        `https://graph.facebook.com/v21.0/${biz.id}/owned_product_catalogs?fields=id,name,product_count&access_token=${conn.accessToken}`
+      );
+      const catData = await catRes.json();
+      if (catData.error) continue;
+      for (const c of catData.data || []) {
+        catalogs.push({ id: c.id, name: c.name, productCount: c.product_count ?? null, businessName: biz.name });
+      }
+    }
+
+    res.json({ connected: true, catalogs, selectedCatalogId: conn.catalogId || null });
+  } catch (err) {
+    console.error("catalog discovery error:", err);
+    res.status(500).json({ connected: true, error: "discovery failed" });
+  }
+});
+
+app.post("/api/meta/catalog/select", requireAuth, (req, res) => {
+  const conn = readMetaConnection();
+  if (!conn) return res.status(400).json({ ok: false, error: "not connected" });
+  const { catalogId } = req.body ?? {};
+  if (!catalogId) return res.status(400).json({ ok: false, error: "missing catalogId" });
+  writeMetaConnection({ ...conn, catalogId });
+  res.json({ ok: true });
+});
+
+// Push local catalog items into the selected Facebook product catalog.
+app.post("/api/meta/catalog/sync", requireAuth, async (req, res) => {
+  const conn = readMetaConnection();
+  if (!conn?.accessToken || !conn?.catalogId) {
+    return res.status(400).json({ ok: false, error: "no catalog selected" });
+  }
+
+  const storeUrl = `${req.protocol}://${req.get("host")}/store`;
+  const items = catalog.list();
+  if (!items.length) return res.json({ ok: true, count: 0 });
+
+  const requests = items.map((item) => {
+    if (item.visible === false) {
+      return { method: "DELETE", retailer_id: item.id };
+    }
+    return {
+      method: "UPDATE",
+      retailer_id: item.id,
+      data: {
+        name: item.name || "منتج",
+        description: item.description || item.name || "",
+        availability: "in stock",
+        condition: "new",
+        price: `${Number(item.priceAmount) || 0} ${item.currency || "YER"}`,
+        image_url: item.image || "",
+        url: storeUrl,
+        brand: "Choga",
+      },
+    };
+  });
+
+  try {
+    const body = new URLSearchParams({
+      item_type: "PRODUCT_ITEM",
+      requests: JSON.stringify(requests),
+      access_token: conn.accessToken,
+    });
+    const syncRes = await fetch(`https://graph.facebook.com/v21.0/${conn.catalogId}/items_batch`, {
+      method: "POST",
+      body,
+    });
+    const syncData = await syncRes.json();
+    if (syncData.error) return res.status(400).json({ ok: false, error: syncData.error.message });
+    res.json({ ok: true, count: requests.length, handles: syncData.handles || [] });
+  } catch (err) {
+    console.error("catalog sync error:", err);
+    res.status(500).json({ ok: false, error: "sync failed" });
+  }
+});
+
 // ── public storefront (no auth — read-only) ────────────────────
 app.get("/api/public/storefront", (req, res) => {
   const settings = readSettings();
