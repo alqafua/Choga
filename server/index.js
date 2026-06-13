@@ -51,6 +51,22 @@ function writeMetaConnection(data) {
   fs.writeFileSync(META_FILE, JSON.stringify(data, null, 2));
 }
 
+// ── TikTok connection (Content Posting API) ─────────────────────
+const TIKTOK_FILE = path.join(DATA_DIR, "tiktok-connection.json");
+const TIKTOK_SCOPES = ["user.info.basic", "video.publish", "video.upload"].join(",");
+
+function readTikTokConnection() {
+  try {
+    return JSON.parse(fs.readFileSync(TIKTOK_FILE, "utf-8"));
+  } catch {
+    return null;
+  }
+}
+
+function writeTikTokConnection(data) {
+  fs.writeFileSync(TIKTOK_FILE, JSON.stringify(data, null, 2));
+}
+
 // Publish a content item to its target platform via the Meta Graph API.
 // Returns { ok: true, postId } on success or { ok: false, error } otherwise.
 async function publishToMeta(item) {
@@ -98,6 +114,88 @@ async function publishToMeta(item) {
   }
 
   return { ok: false, error: "unsupported_platform" };
+}
+
+// Returns a valid TikTok access token, refreshing it via the stored
+// refresh token (valid for 1 year) if the access token (valid for 24h)
+// has expired.
+async function getTikTokAccessToken() {
+  const conn = readTikTokConnection();
+  if (!conn?.accessToken) return null;
+  if (conn.expiresAt && Date.now() < conn.expiresAt - 60_000) return conn.accessToken;
+  if (!conn.refreshToken) return conn.accessToken;
+
+  const settings = readSettings();
+  const clientKey = settings?.api?.tiktokClientKey;
+  const clientSecret = settings?.api?.tiktokClientSecret;
+  if (!clientKey || !clientSecret) return conn.accessToken;
+
+  try {
+    const r = await fetch("https://open.tiktokapis.com/v2/oauth/token/", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_key: clientKey,
+        client_secret: clientSecret,
+        grant_type: "refresh_token",
+        refresh_token: conn.refreshToken,
+      }),
+    });
+    const data = await r.json();
+    if (!data.access_token) return conn.accessToken;
+    writeTikTokConnection({
+      ...conn,
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token || conn.refreshToken,
+      expiresAt: Date.now() + (data.expires_in || 0) * 1000,
+    });
+    return data.access_token;
+  } catch {
+    return conn.accessToken;
+  }
+}
+
+// Publish a photo post to TikTok via the Content Posting API. Unaudited
+// apps are restricted by TikTok to private (SELF_ONLY) visibility until
+// the app passes review, and PULL_FROM_URL requires the image to be on a
+// domain verified in the TikTok developer portal.
+async function publishToTikTok(item) {
+  const accessToken = await getTikTokAccessToken();
+  if (!accessToken) return { ok: false, error: "tiktok_not_connected" };
+  if (!item.image) return { ok: false, error: "image_required" };
+
+  try {
+    const r = await fetch("https://open.tiktokapis.com/v2/post/publish/content/init/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({
+        post_info: {
+          title: item.caption || "",
+          privacy_level: "SELF_ONLY",
+          disable_comment: false,
+        },
+        source_info: {
+          source: "PULL_FROM_URL",
+          photo_cover_index: 0,
+          photo_images: [item.image],
+        },
+        post_mode: "DIRECT_POST",
+        media_type: "PHOTO",
+      }),
+    });
+    const data = await r.json();
+    if (data.error && data.error.code !== "ok") return { ok: false, error: data.error.message || data.error.code };
+    return { ok: true, postId: data.data?.publish_id || null };
+  } catch (err) {
+    console.error("tiktok publish error:", err);
+    return { ok: false, error: "tiktok publish failed" };
+  }
+}
+
+// Dispatch a content item to the right platform publisher.
+async function publishContentItem(item) {
+  if (item.platform === "tiktok") return publishToTikTok(item);
+  return publishToMeta(item);
 }
 
 const app = express();
@@ -221,13 +319,13 @@ app.delete("/api/content/:id", requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// Publish a "ready" content item to Instagram/Facebook right now via the
-// connected Meta account, and mark it as published on success.
+// Publish a "ready" content item to Instagram/Facebook/TikTok right now via
+// the connected accounts, and mark it as published on success.
 app.post("/api/content/:id/publish", requireAuth, async (req, res) => {
   const item = content.list().find((i) => i.id === req.params.id);
   if (!item) return res.status(404).json({ ok: false, error: "not found" });
 
-  const result = await publishToMeta(item);
+  const result = await publishContentItem(item);
   if (!result.ok) return res.status(400).json(result);
 
   const updated = content.update(item.id, {
@@ -710,6 +808,93 @@ app.post("/api/meta/disconnect", requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── TikTok connection (Content Posting API) ─────────────────────
+// Uses the Client Key/Secret pasted into Settings ← مفاتيح API, so the
+// whole setup is self-serve (no server env vars / redeploy needed).
+app.get("/api/tiktok/status", requireAuth, (req, res) => {
+  const conn = readTikTokConnection();
+  const settings = readSettings();
+  res.json({
+    configured: !!(settings?.api?.tiktokClientKey && settings?.api?.tiktokClientSecret),
+    connected: !!conn,
+    displayName: conn?.displayName || null,
+    connectedAt: conn?.connectedAt || null,
+  });
+});
+
+app.get("/api/tiktok/connect", requireAuth, (req, res) => {
+  const settings = readSettings();
+  const clientKey = settings?.api?.tiktokClientKey;
+  if (!clientKey) return res.status(400).send("أضف Client Key و Client Secret من الإعدادات ← مفاتيح API أولاً");
+
+  const redirectUri = `${req.protocol}://${req.get("host")}/api/tiktok/callback`;
+  const state = jwt.sign({ purpose: "tiktok-connect" }, JWT_SECRET, { expiresIn: "10m" });
+  const url = `https://www.tiktok.com/v2/auth/authorize/?client_key=${encodeURIComponent(clientKey)}&scope=${encodeURIComponent(TIKTOK_SCOPES)}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`;
+  res.redirect(url);
+});
+
+app.get("/api/tiktok/callback", async (req, res) => {
+  const { code, state, error } = req.query;
+  try {
+    jwt.verify(String(state), JWT_SECRET);
+  } catch {
+    return res.redirect("/?tiktok=error");
+  }
+  if (error || !code) return res.redirect("/?tiktok=error");
+
+  const settings = readSettings();
+  const clientKey = settings?.api?.tiktokClientKey;
+  const clientSecret = settings?.api?.tiktokClientSecret;
+  if (!clientKey || !clientSecret) return res.redirect("/?tiktok=error");
+
+  const redirectUri = `${req.protocol}://${req.get("host")}/api/tiktok/callback`;
+  try {
+    const tokenRes = await fetch("https://open.tiktokapis.com/v2/oauth/token/", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_key: clientKey,
+        client_secret: clientSecret,
+        code: String(code),
+        grant_type: "authorization_code",
+        redirect_uri: redirectUri,
+      }),
+    });
+    const tokenData = await tokenRes.json();
+    if (!tokenData.access_token) throw new Error("token exchange failed");
+
+    let displayName = null;
+    try {
+      const infoRes = await fetch("https://open.tiktokapis.com/v2/user/info/?fields=display_name", {
+        headers: { Authorization: `Bearer ${tokenData.access_token}` },
+      });
+      const infoData = await infoRes.json();
+      displayName = infoData.data?.user?.display_name || null;
+    } catch {
+      // best-effort
+    }
+
+    writeTikTokConnection({
+      openId: tokenData.open_id || null,
+      displayName,
+      accessToken: tokenData.access_token,
+      refreshToken: tokenData.refresh_token || null,
+      expiresAt: Date.now() + (tokenData.expires_in || 0) * 1000,
+      connectedAt: new Date().toISOString(),
+    });
+
+    res.redirect("/?tiktok=connected");
+  } catch (err) {
+    console.error("tiktok oauth error:", err);
+    res.redirect("/?tiktok=error");
+  }
+});
+
+app.post("/api/tiktok/disconnect", requireAuth, (req, res) => {
+  if (fs.existsSync(TIKTOK_FILE)) fs.unlinkSync(TIKTOK_FILE);
+  res.json({ ok: true });
+});
+
 // ── product catalog sync (Facebook Commerce Manager → Instagram Shop) ──
 // Discover product catalogs the connected account manages, so local
 // catalog items can be pushed into the same catalog feeding Instagram Shop.
@@ -875,7 +1060,7 @@ app.get("*", (req, res) => {
   res.sendFile(path.join(clientDist, "index.html"));
 });
 
-// ── auto-publish: posts "ready" Instagram/Facebook content when due ─────
+// ── auto-publish: posts "ready" content when due ─────────────────────
 async function runAutoPublish() {
   try {
     const settings = readSettings();
@@ -883,11 +1068,11 @@ async function runAutoPublish() {
     const today = new Date().toISOString().slice(0, 10);
     const due = content.list().filter((i) =>
       i.status === "ready" &&
-      ["instagram", "facebook"].includes(i.platform) &&
+      ["instagram", "facebook", "tiktok"].includes(i.platform) &&
       (!i.scheduledDate || i.scheduledDate <= today)
     );
     for (const item of due) {
-      const result = await publishToMeta(item);
+      const result = await publishContentItem(item);
       if (result.ok) {
         content.update(item.id, { status: "published", publishedAt: new Date().toISOString(), publishedPostId: result.postId });
       } else {

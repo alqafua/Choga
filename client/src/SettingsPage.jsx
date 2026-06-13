@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { C, card, lbl, subHead, fieldStyle, chipStyle, primaryBtn, dangerBtn, OCCASIONS } from "./theme";
-import { getSettings, saveSettings, getMetaStatus, connectMetaToken, disconnectMeta } from "./api";
+import { getSettings, saveSettings, getMetaStatus, connectMetaToken, disconnectMeta, getTikTokStatus, disconnectTikTok } from "./api";
 
 const TONES     = ["راقٍ وودّي","احترافي","حماسي","عاطفي","بسيط وصريح"];
 const TRAITS    = ["فاخر","حرفي","دافئ","مناسباتي","ودّي","مبدع","موثوق","أنيق"];
@@ -14,8 +14,18 @@ const PLATFORMS = [
 ];
 
 const API_FIELDS = [
-  { id:"anthropic", name:"Anthropic Claude", desc:"الذكاء الاصطناعي — صناعة المحتوى", where:"console.anthropic.com  ←  API Keys",       ph:"sk-ant-api03-..." },
-  { id:"tiktok",    name:"TikTok",           desc:"النشر على تيك توك",                 where:"developers.tiktok.com  ←  Apps  ←  Keys", ph:"xxxx-xxxx-xxxx-xxxx" },
+  { id:"anthropic",        name:"Anthropic Claude",     desc:"الذكاء الاصطناعي — صناعة المحتوى",      where:"console.anthropic.com  ←  API Keys",       ph:"sk-ant-api03-..." },
+  { id:"tiktokClientKey",    name:"TikTok — Client Key",    desc:"النشر على تيك توك (المعرّف)",  where:"developers.tiktok.com  ←  Apps  ←  Keys", ph:"aw_xxxxxxxxxxxxxxxxxxxx" },
+  { id:"tiktokClientSecret", name:"TikTok — Client Secret", desc:"النشر على تيك توك (الرمز السري)", where:"developers.tiktok.com  ←  Apps  ←  Keys", ph:"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" },
+];
+
+const TIKTOK_GUIDE_STEPS = [
+  "افتح الرابط أدناه وسجّل دخول بحساب تيك توك الخاص بالمحل",
+  "اضغط \"Manage apps\" ← \"Create an app\"",
+  "من إعدادات التطبيق فعّل صلاحية \"Content Posting API\"",
+  "انسخ Client Key و Client Secret من صفحة التطبيق وألصقهما في الحقلين أعلاه ثم احفظ الإعدادات",
+  "من حقل \"Redirect URI\" في إعدادات التطبيق، أضف الرابط الموضّح في تبويب «الحسابات» تحت بطاقة «ربط تيك توك»",
+  "رجوعاً لتبويب «الحسابات» — اضغط «ربط تيك توك» لإكمال الربط عبر تسجيل الدخول",
 ];
 
 const API_GUIDES = {
@@ -29,16 +39,8 @@ const API_GUIDES = {
       "الصقه بالخانة أعلاه ثم اضغط \"حفظ الإعدادات\" بالأسفل",
     ],
   },
-  tiktok: {
-    url: "https://developers.tiktok.com/apps",
-    steps: [
-      "افتح الرابط أدناه وسجّل دخول بحساب تيك توك الخاص بالمحل",
-      "اضغط \"Manage apps\" ← \"Create an app\"",
-      "من إعدادات التطبيق فعّل صلاحية \"Content Posting API\"",
-      "انسخ Client Key و Client Secret من صفحة التطبيق",
-      "أكمل عملية OAuth للحصول على Access Token (يحتاج مراجعة من تيك توك قبل التفعيل الكامل)",
-    ],
-  },
+  tiktokClientKey:    { url: "https://developers.tiktok.com/apps", steps: TIKTOK_GUIDE_STEPS },
+  tiktokClientSecret: { url: "https://developers.tiktok.com/apps", steps: TIKTOK_GUIDE_STEPS },
 };
 
 const DEF = {
@@ -53,7 +55,7 @@ const DEF = {
   occasions:["أعراس","عيد الفطر","عيد الأضحى","رمضان"],
   priceRange:"", extra:"",
   platforms:{ instagram:"choga.yo", facebook:"CHOGA", snapchat:"", tiktok:"", whatsapp:"" },
-  api:{ anthropic:"", tiktok:"" },
+  api:{ anthropic:"", tiktokClientKey:"", tiktokClientSecret:"" },
 };
 
 export default function SettingsPage() {
@@ -71,6 +73,14 @@ export default function SettingsPage() {
     return "";
   });
 
+  const [tiktok,    setTiktok]    = useState(null);
+  const [tiktokMsg] = useState(() => {
+    const result = new URLSearchParams(window.location.search).get("tiktok");
+    if (result === "connected") return "تم ربط تيك توك بنجاح ✅";
+    if (result === "error") return "تعذّر الربط — حاول مجدداً";
+    return "";
+  });
+
   useEffect(()=>{
     (async()=>{
       try {
@@ -84,8 +94,9 @@ export default function SettingsPage() {
 
   useEffect(()=>{
     const params = new URLSearchParams(window.location.search);
-    if (params.has("meta")) {
+    if (params.has("meta") || params.has("tiktok")) {
       params.delete("meta");
+      params.delete("tiktok");
       const qs = params.toString();
       window.history.replaceState({}, "", window.location.pathname + (qs ? `?${qs}` : ""));
     }
@@ -94,6 +105,13 @@ export default function SettingsPage() {
         setMeta(await getMetaStatus());
       } catch {
         setMeta({ configured:false, connected:false });
+      }
+    })();
+    (async()=>{
+      try {
+        setTiktok(await getTikTokStatus());
+      } catch {
+        setTiktok({ configured:false, connected:false });
       }
     })();
   },[]);
@@ -106,6 +124,12 @@ export default function SettingsPage() {
     if (!window.confirm("هل تريد إلغاء ربط إنستغرام؟")) return;
     await disconnectMeta();
     setMeta(await getMetaStatus());
+  };
+
+  const handleTikTokDisconnect = async () => {
+    if (!window.confirm("هل تريد إلغاء ربط تيك توك؟")) return;
+    await disconnectTikTok();
+    setTiktok(await getTikTokStatus());
   };
 
   const handleMetaTokenConnect = async () => {
@@ -306,6 +330,39 @@ export default function SettingsPage() {
                     <p style={{fontSize:11,color:C.dim,marginBottom:8,lineHeight:1.7}}>أو اربط مباشرة عبر تسجيل الدخول (يحتاج إعداد رابط إعادة التوجيه):</p>
                     <a href="/api/meta/connect" style={{...primaryBtn, display:"inline-block", textDecoration:"none", background:"transparent", border:`1px solid ${C.accent}`, color:C.accent}}>ربط عبر تسجيل الدخول</a>
                   </div>
+                )}
+              </>
+            )}
+          </div>
+
+          <div style={card}>
+            <div style={subHead}>ربط تيك توك</div>
+            {tiktokMsg && (
+              <div style={{fontSize:12, color: tiktokMsg.includes("نجاح") ? C.green : C.red, marginBottom:10, lineHeight:1.7}}>{tiktokMsg}</div>
+            )}
+            {tiktok?.connected ? (
+              <>
+                <div style={{fontSize:13,marginBottom:12,lineHeight:1.8}}>
+                  <span style={{color:C.green,fontWeight:700}}>متصل ✓</span>
+                  {tiktok.displayName && <> — <strong>{tiktok.displayName}</strong></>}
+                </div>
+                <div style={{marginBottom:12,display:"flex",gap:8,fontSize:11,color:"#D4A020",background:"rgba(212,160,32,0.08)",border:"1px solid rgba(212,160,32,0.2)",borderRadius:10,padding:"8px 12px",lineHeight:1.6}}>
+                  <span style={{flexShrink:0}}>⚠️</span><span>المنشورات ستكون خاصة (تظهر لك فقط) حتى تتم مراجعة تطبيقك من تيك توك والسماح بالنشر العام.</span>
+                </div>
+                <button type="button" onClick={handleTikTokDisconnect} style={dangerBtn}>إلغاء الربط</button>
+              </>
+            ) : (
+              <>
+                <p style={{fontSize:12,color:C.muted,marginBottom:12,lineHeight:1.7}}>
+                  أضف Client Key و Client Secret من تبويب <strong>مفاتيح API</strong> واحفظهما، ثم سجّل رابط إعادة التوجيه التالي في إعدادات تطبيق تيك توك (Redirect URI):
+                </p>
+                <div style={{fontSize:11,color:C.dim,fontFamily:"monospace",direction:"ltr",textAlign:"right",background:C.inp,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px",marginBottom:12,wordBreak:"break-all"}}>
+                  {`${window.location.origin}/api/tiktok/callback`}
+                </div>
+                {tiktok?.configured ? (
+                  <a href="/api/tiktok/connect" style={{...primaryBtn, display:"inline-block", textDecoration:"none", textAlign:"center"}}>ربط تيك توك</a>
+                ) : (
+                  <div style={{fontSize:12,color:C.muted,lineHeight:1.7}}>أكمل وحفظ مفتاحي API أعلاه أولاً لتفعيل الربط</div>
                 )}
               </>
             )}

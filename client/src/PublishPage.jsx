@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { C, card, subHead, statusChipStyle, primaryBtn, platformInfo } from "./theme";
-import { listContent, updateContent, publishContent, getSettings, saveSettings, getMetaStatus } from "./api";
+import { listContent, updateContent, publishContent, getSettings, saveSettings, getMetaStatus, getTikTokStatus } from "./api";
 
 const ERROR_LABELS = {
   meta_not_connected: "يجب ربط حساب ميتا من الإعدادات أولاً",
   facebook_not_connected: "لا يوجد صفحة فيسبوك مرتبطة بحساب ميتا",
   instagram_not_connected: "لا يوجد حساب إنستغرام مرتبط بحساب ميتا",
-  image_required: "أضف صورة لهذا المنشور من تبويب التخطيط للنشر على إنستغرام",
+  tiktok_not_connected: "يجب ربط حساب تيك توك من الإعدادات أولاً",
+  image_required: "أضف صورة لهذا المنشور من تبويب التخطيط لتفعيل النشر التلقائي",
   unsupported_platform: "هذه المنصة لا تدعم النشر التلقائي بعد",
 };
 const errorLabel = (code) => ERROR_LABELS[code] || code || "تعذّر النشر — حاول مجدداً";
@@ -15,6 +16,7 @@ export default function PublishPage() {
   const [items,    setItems]    = useState([]);
   const [settings, setSettings] = useState(null);
   const [meta,     setMeta]     = useState(null);
+  const [tiktok,   setTiktok]   = useState(null);
   const [loading,  setLoading]  = useState(true);
   const [busyId,   setBusyId]   = useState(null);
   const [errors,   setErrors]   = useState({});
@@ -23,10 +25,11 @@ export default function PublishPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const [c, s, m] = await Promise.all([listContent(), getSettings(), getMetaStatus()]);
+      const [c, s, m, t] = await Promise.all([listContent(), getSettings(), getMetaStatus(), getTikTokStatus()]);
       setItems(c);
       setSettings(s || {});
       setMeta(m);
+      setTiktok(t);
     } catch {
       setItems([]);
     }
@@ -110,8 +113,9 @@ export default function PublishPage() {
           const pl = platformInfo(item.platform);
           const igOk = !!(meta?.connected && meta.igUsername);
           const fbOk = !!(meta?.connected && meta.fbPageName);
-          const apiSupported = (item.platform === "instagram" && igOk) || (item.platform === "facebook" && fbOk);
-          const needsImage = item.platform === "instagram" && !item.image;
+          const ttOk = !!tiktok?.connected;
+          const apiSupported = (item.platform === "instagram" && igOk) || (item.platform === "facebook" && fbOk) || (item.platform === "tiktok" && ttOk);
+          const needsImage = (item.platform === "instagram" || item.platform === "tiktok") && !item.image;
           const canPublishNow = apiSupported && !needsImage;
           const busy = busyId === item.id;
 
@@ -135,7 +139,13 @@ export default function PublishPage() {
 
               {apiSupported && needsImage && (
                 <div style={{marginBottom:10,display:"flex",gap:8,fontSize:11,color:"#D4A020",background:"rgba(212,160,32,0.08)",border:"1px solid rgba(212,160,32,0.2)",borderRadius:10,padding:"8px 12px",lineHeight:1.6}}>
-                  <span style={{flexShrink:0}}>⚠️</span><span>أضف صورة لهذا المنشور من تبويب التخطيط لتفعيل النشر التلقائي على إنستغرام</span>
+                  <span style={{flexShrink:0}}>⚠️</span><span>أضف صورة لهذا المنشور من تبويب التخطيط لتفعيل النشر التلقائي</span>
+                </div>
+              )}
+
+              {canPublishNow && item.platform === "tiktok" && (
+                <div style={{marginBottom:10,display:"flex",gap:8,fontSize:11,color:"#D4A020",background:"rgba(212,160,32,0.08)",border:"1px solid rgba(212,160,32,0.2)",borderRadius:10,padding:"8px 12px",lineHeight:1.6}}>
+                  <span style={{flexShrink:0}}>⚠️</span><span>سيُنشر هذا المنشور كمسودة خاصة (تظهر لك فقط) على تيك توك حتى تتم مراجعة التطبيق والسماح بالنشر العام</span>
                 </div>
               )}
 

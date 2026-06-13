@@ -66,6 +66,10 @@ export const connectMetaToken = (token) =>
   request("/api/meta/token", { method: "POST", body: JSON.stringify({ token }) }).then((r) => r.json());
 export const disconnectMeta = () => request("/api/meta/disconnect", { method: "POST" }).then((r) => r.json());
 
+// ── TikTok connection (Content Posting API) ──────────────────────
+export const getTikTokStatus = () => request("/api/tiktok/status").then((r) => r.json());
+export const disconnectTikTok = () => request("/api/tiktok/disconnect", { method: "POST" }).then((r) => r.json());
+
 // ── Instagram DM inbox ───────────────────────────────────────────
 export const getConversations = () => request("/api/meta/conversations").then((r) => r.json());
 export const getConversationMessages = (id) =>
