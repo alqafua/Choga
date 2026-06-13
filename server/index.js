@@ -611,12 +611,13 @@ app.post("/api/meta/catalog/sync", requireAuth, async (req, res) => {
   if (!items.length) return res.json({ ok: true, count: 0 });
 
   const requests = items.map((item) => {
+    const retailerId = item.fbRetailerId || item.id;
     if (item.visible === false) {
-      return { method: "DELETE", retailer_id: item.id };
+      return { method: "DELETE", retailer_id: retailerId };
     }
     return {
       method: "UPDATE",
-      retailer_id: item.id,
+      retailer_id: retailerId,
       data: {
         name: item.name || "منتج",
         description: item.description || item.name || "",
@@ -646,6 +647,52 @@ app.post("/api/meta/catalog/sync", requireAuth, async (req, res) => {
   } catch (err) {
     console.error("catalog sync error:", err);
     res.status(500).json({ ok: false, error: "sync failed" });
+  }
+});
+
+// Pull existing products from the selected Facebook catalog into Choga,
+// so products already managed in Commerce Manager show up here too.
+app.post("/api/meta/catalog/import", requireAuth, async (req, res) => {
+  const conn = readMetaConnection();
+  if (!conn?.accessToken || !conn?.catalogId) {
+    return res.status(400).json({ ok: false, error: "no catalog selected" });
+  }
+
+  try {
+    const prodRes = await fetch(
+      `https://graph.facebook.com/v21.0/${conn.catalogId}/products?fields=id,retailer_id,name,description,price,image_url,availability&limit=200&access_token=${conn.accessToken}`
+    );
+    const prodData = await prodRes.json();
+    if (prodData.error) return res.status(400).json({ ok: false, error: prodData.error.message });
+
+    const existing = catalog.list();
+    let imported = 0, updated = 0;
+    for (const p of prodData.data || []) {
+      const fbRetailerId = p.retailer_id || p.id;
+      const priceMatch = (p.price || "").match(/([\d.]+)\s*([A-Za-z]{3})?/);
+      const fields = {
+        name: p.name || "",
+        description: p.description || "",
+        image: p.image_url || "",
+        price: p.price || "",
+        priceAmount: priceMatch ? priceMatch[1] : "",
+        currency: (priceMatch && priceMatch[2] && priceMatch[2].toUpperCase()) || "YER",
+        visible: p.availability !== "out of stock",
+        fbRetailerId,
+      };
+      const match = existing.find((e) => e.fbRetailerId === fbRetailerId);
+      if (match) {
+        catalog.update(match.id, fields);
+        updated++;
+      } else {
+        catalog.create(fields);
+        imported++;
+      }
+    }
+    res.json({ ok: true, imported, updated, total: (prodData.data || []).length });
+  } catch (err) {
+    console.error("catalog import error:", err);
+    res.status(500).json({ ok: false, error: "import failed" });
   }
 });
 
