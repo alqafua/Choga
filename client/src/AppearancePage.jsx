@@ -1,16 +1,12 @@
 import { useState, useEffect } from "react";
-import { C, card, lbl, subHead, fieldStyle, primaryBtn, PLATFORMS } from "./theme";
+import { C, card, lbl, subHead, fieldStyle, PLATFORMS } from "./theme";
 import { getSettings, saveSettings } from "./api";
-
-const THEME_COLORS = ["#F0A030", "#E1306C", "#4A90D9", "#22c55e", "#A78BFA", "#F5D020", "#69C9D0", "#ef4444"];
 
 const emptyLinks = () => PLATFORMS.reduce((acc, p) => ({ ...acc, [p.id]: { label: "", url: "" } }), {});
 
-const DEF_APPEARANCE = { logo: "", coverImage: "", themeColor: C.accent, links: emptyLinks() };
-
 export default function AppearancePage() {
   const [settings, setSettings] = useState(null);
-  const [appearance, setAppearance] = useState(DEF_APPEARANCE);
+  const [links, setLinks] = useState(emptyLinks());
   const [loading, setLoading] = useState(true);
   const [focus, setFocus] = useState("");
   const [status, setStatus] = useState("idle");
@@ -21,12 +17,7 @@ export default function AppearancePage() {
         const remote = await getSettings();
         setSettings(remote || {});
         const a = remote?.appearance || {};
-        setAppearance({
-          logo: a.logo || "",
-          coverImage: a.coverImage || "",
-          themeColor: a.themeColor || C.accent,
-          links: { ...emptyLinks(), ...(a.links || {}) },
-        });
+        setLinks({ ...emptyLinks(), ...(a.links || {}) });
       } catch {
         setSettings({});
       }
@@ -35,13 +26,12 @@ export default function AppearancePage() {
   }, []);
 
   const iStyle = (id) => fieldStyle(focus, id);
-  const up = (k, v) => setAppearance(a => ({ ...a, [k]: v }));
-  const upLink = (id, k, v) => setAppearance(a => ({ ...a, links: { ...a.links, [id]: { ...a.links[id], [k]: v } } }));
+  const upLink = (id, k, v) => setLinks(l => ({ ...l, [id]: { ...l[id], [k]: v } }));
 
   const save = async () => {
     setStatus("saving");
     try {
-      await saveSettings({ ...settings, appearance });
+      await saveSettings({ ...settings, appearance: { ...(settings?.appearance || {}), links } });
       setStatus("saved");
     } catch {
       setStatus("error");
@@ -56,46 +46,13 @@ export default function AppearancePage() {
   return (
     <div style={{flex:1, overflowY:"auto", padding:"16px 14px 24px"}}>
       <p style={{fontSize:12, color:C.muted, marginBottom:14, lineHeight:1.7}}>
-        تحكّم بشكل متجرك العام (الموقع الإلكتروني) — الشعار، صورة الغلاف، اللون الأساسي، وأسماء وروابط حساباتك.
+        حدّد الاسم المعروض ورابط الصفحة لكل حساب — تُستخدم هذه البيانات في موقع المتجر العام وأي مكان تُعرض فيه حساباتك.
       </p>
 
       <div style={card}>
-        <div style={subHead}>هوية المتجر</div>
-        <div style={{marginBottom:14}}>
-          <label style={lbl}>رابط الشعار (Logo)</label>
-          <input style={{...iStyle("logo"),direction:"ltr",textAlign:"right",fontFamily:"monospace",fontSize:12}} value={appearance.logo} onFocus={()=>setFocus("logo")} onBlur={()=>setFocus("")} onChange={e=>up("logo",e.target.value)} placeholder="https://...الصق رابط الشعار" />
-          {appearance.logo && (
-            <img src={appearance.logo} alt="" style={{width:56,height:56,objectFit:"cover",borderRadius:12,marginTop:10,border:`1px solid ${C.border}`}} onError={(e)=>{e.target.style.display="none";}} />
-          )}
-        </div>
-        <div style={{marginBottom:14}}>
-          <label style={lbl}>رابط صورة الغلاف</label>
-          <input style={{...iStyle("cover"),direction:"ltr",textAlign:"right",fontFamily:"monospace",fontSize:12}} value={appearance.coverImage} onFocus={()=>setFocus("cover")} onBlur={()=>setFocus("")} onChange={e=>up("coverImage",e.target.value)} placeholder="https://...الصق رابط صورة الغلاف" />
-          {appearance.coverImage && (
-            <img src={appearance.coverImage} alt="" style={{width:"100%",height:90,objectFit:"cover",borderRadius:12,marginTop:10,border:`1px solid ${C.border}`}} onError={(e)=>{e.target.style.display="none";}} />
-          )}
-        </div>
-        <div>
-          <label style={lbl}>اللون الأساسي للموقع</label>
-          <div style={{display:"flex",flexWrap:"wrap",gap:10,marginTop:8,alignItems:"center"}}>
-            {THEME_COLORS.map(c => (
-              <button key={c} type="button" onClick={()=>up("themeColor",c)} style={{
-                width:32, height:32, borderRadius:"50%", background:c, cursor:"pointer",
-                border: appearance.themeColor===c ? `3px solid ${C.text}` : `1px solid ${C.border}`,
-                boxShadow: appearance.themeColor===c ? `0 0 0 2px ${c}55` : "none",
-              }} />
-            ))}
-            <input type="color" value={appearance.themeColor} onChange={e=>up("themeColor",e.target.value)}
-              style={{width:40,height:32,borderRadius:8,border:`1px solid ${C.border}`,background:"none",cursor:"pointer",padding:2}} />
-          </div>
-        </div>
-      </div>
-
-      <div style={card}>
         <div style={subHead}>أسماء وروابط الحسابات</div>
-        <p style={{fontSize:12,color:C.muted,marginBottom:14,lineHeight:1.7}}>تظهر هذه الروابط في موقع المتجر العام — اتركها فارغة لإخفاء المنصّة.</p>
         {PLATFORMS.map(p => {
-          const link = appearance.links[p.id] || { label: "", url: "" };
+          const link = links[p.id] || { label: "", url: "" };
           return (
             <div key={p.id} style={{marginBottom:16, paddingBottom:16, borderBottom:`1px solid ${C.border}`}}>
               <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
@@ -104,7 +61,7 @@ export default function AppearancePage() {
               </div>
               <div style={{marginBottom:10}}>
                 <label style={lbl}>الاسم المعروض</label>
-                <input style={iStyle(`${p.id}_label`)} value={link.label} onFocus={()=>setFocus(`${p.id}_label`)} onBlur={()=>setFocus("")} onChange={e=>upLink(p.id,"label",e.target.value)} placeholder={`اسم ${p.name} كما يظهر في الموقع`} />
+                <input style={iStyle(`${p.id}_label`)} value={link.label} onFocus={()=>setFocus(`${p.id}_label`)} onBlur={()=>setFocus("")} onChange={e=>upLink(p.id,"label",e.target.value)} placeholder={`اسم ${p.name} كما يظهر للزوار`} />
               </div>
               <div>
                 <label style={lbl}>الرابط</label>
